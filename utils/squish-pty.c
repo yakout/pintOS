@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stropts.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -285,12 +284,13 @@ main (int argc __attribute__ ((unused)), char *argv[])
 
   /* System V implementations need STREAMS configuration for the
      slave. */
-  if (isastream (slave))
-    {
-      if (ioctl (slave, I_PUSH, "ptem") < 0
-          || ioctl (slave, I_PUSH, "ldterm") < 0)
-        fail_io ("ioctl");
-    }
+  /* macOS: stream ttys doesn't exist, no need to check */
+  // if (isastream (slave))
+  //   {
+  //     if (ioctl (slave, I_PUSH, "ptem") < 0
+  //         || ioctl (slave, I_PUSH, "ldterm") < 0)
+  //       fail_io ("ioctl");
+  //   }
 
   /* Arrange to get notified when a child dies, by writing a byte
      to a pipe fd.  We really want to use pselect() and

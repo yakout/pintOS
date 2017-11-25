@@ -25,6 +25,8 @@ static int64_t ticks;
 static unsigned loops_per_tick;
 
 static intr_handler_func timer_interrupt;
+static list_less_func comparator;
+
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
@@ -92,8 +94,20 @@ timer_sleep (int64_t ticks)
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+
+  /* NEW VERSION */
+  enum intr_level old_level;
+  old_level = intr_disable ();
+  struct thread *t = thread_current ();
+  t->sleep_time = ticks;
+  list_insert_ordered(&sleep_list, &t->elem, comparator, NULL);
+  /* this will change the current thread state to THREAD_BLOCKED and then call schedule () */
+  thread_block ();
+  intr_set_level (old_level);
+
+  /* OLD VERSION */
+  /* while (timer_elapsed (start) < ticks) 
+     thread_yield (); */
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -171,6 +185,24 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+  enum intr_level old_level;
+  old_level = intr_disable ();
+  struct list_elem *e;
+  for (e = list_begin (&sleep_list); e != list_end (&sleep_list)
+                                    && 
+                                    ((e != NULL && e->prev == NULL && e->next != NULL)
+                                    || (e != NULL && e->prev != NULL && e->next != NULL));
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, elem);
+      printf("%ul ", t->sleep_time);
+      if (--t->sleep_time == 0) {
+        struct list_elem* e_poped = list_pop_front(&sleep_list);
+        thread_unblock(list_entry (e_poped, struct thread, elem));
+      }
+    }
+    printf("\n");
+  intr_set_level (old_level);
   thread_tick ();
 }
 
@@ -243,4 +275,14 @@ real_time_delay (int64_t num, int32_t denom)
      the possibility of overflow. */
   ASSERT (denom % 1000 == 0);
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
+}
+
+/* Comparator used by sleep_list insert operation */
+static bool
+comparator (const struct list_elem *a,
+                             const struct list_elem *b, void *aux)
+{
+  struct thread* t1 = list_entry(a, struct thread, elem);
+  struct thread* t2 = list_entry(b, struct thread, elem);
+  return t1->sleep_time < t2->sleep_time;
 }

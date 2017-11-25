@@ -1,4 +1,6 @@
-utils/
+utils/pintos
+utils/Pintos.pm
+NOTES
 
 # macOS dummy files
 .DS_Store

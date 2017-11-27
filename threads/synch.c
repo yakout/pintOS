@@ -32,6 +32,9 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+
+extern struct list ready_list;
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -68,9 +71,18 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_push_back (&sema->waiters, &thread_current ()->elem);
+      // handling priority donation
+      donate(running_thread, sema_holder);
+      // ordered insertion
+      list_insert_ordered(&sema->waiters, &running_thread->elem, comparator, NULL);
       thread_block ();
     }
+
+  /* running thread must be the holder of the semaphore at this point 
+    or one of the holders */
+  struct thread running_thread=thread_current ();
+  sema->holder = &running_thread;
+
   sema->value--;
   intr_set_level (old_level);
 }
@@ -196,6 +208,7 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
 }
@@ -231,8 +244,14 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  // revert back priority
+  lock->holder->priority = lock->holder->original_priority;
+  /* we need to handle multiple locks, multiple donations
+     use hash table to hold priorities with corresponding keys
+     ******************** */
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -335,4 +354,38 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
+}
+
+
+
+
+/* Comparator used by priority scheduler insert operation */
+static bool comparator (const struct list_elem *a, const struct list_elem *b, void *aux){
+   struct thread* t1 = list_entry(a, struct thread, elem);
+   struct thread* t2 = list_entry(b, struct thread, elem);
+   return t1->priority < t2->priority;
+}
+
+
+
+
+
+static void donate(struct thread *thread_to_block, struct semaphore *sema){
+  // base case
+  if(sema==NULL){
+    // this thread is definitely is in ready list
+    // remove lock holder from ready list
+    list_remove (&thread_to_block->elem);
+    // reinsert with new priority
+    list_insert_ordered(&ready_list, &thread_to_block->elem, comparator, NULL);
+  }
+  // recursive step
+  struct thread *holder=sema->holder;
+  if(thread_to_block->priority > holder->priority){
+    // update holder priority
+    holder->original_priority = thread_to_block->priority;
+    donate(holder, thread_get_lock(holder));
+  }
+
+
 }

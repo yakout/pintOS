@@ -91,6 +91,9 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
+  if (ticks <= 0) 
+    return;
+
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
@@ -195,13 +198,13 @@ timer_interrupt (struct intr_frame *args UNUSED)
        e = list_next (e))
     {
       struct thread *t = list_entry (e, struct thread, elem);
-      printf("%ul ", t->sleep_time);
+      // printf("%ul ", t->sleep_time);
       if (--t->sleep_time == 0) {
         struct list_elem* e_poped = list_pop_front(&sleep_list);
         thread_unblock(list_entry (e_poped, struct thread, elem));
       }
     }
-    printf("\n");
+    // printf("\n");
   intr_set_level (old_level);
   thread_tick ();
 }

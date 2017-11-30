@@ -73,6 +73,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+static bool comparator (const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -137,6 +138,8 @@ thread_tick (void)
 #endif
   else
     kernel_ticks++;
+
+  update_sleepers ();
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
@@ -590,3 +593,50 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+void 
+update_sleepers()
+{
+  // no need to disable interupts since we are at external iterupt (timer_interupt)
+
+  /* if there is no sleepers, return */
+  if (list_empty (&sleep_list)) return;
+
+  struct list_elem *e;
+  for (e = list_begin (&sleep_list); e != list_end (&sleep_list); e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, sleep_elem);
+      if (-- (t->sleep_time) == 0) {
+        list_remove (e);
+        thread_unblock (t);
+      }
+    }
+}
+
+void
+thread_sleep(int64_t ticks) 
+{  
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  if (ticks <= 0)
+    return;
+
+  struct thread *t = thread_current ();
+  t->sleep_time = ticks;
+
+  list_insert_ordered (&sleep_list, &t->sleep_elem, comparator, NULL);
+
+  /* this will change the current thread state to THREAD_BLOCKED and then call schedule () */
+  thread_block ();
+}
+
+/* Comparator used by sleep_list insert operation */
+static bool
+comparator (const struct list_elem *a,
+                             const struct list_elem *b, void *aux)
+{
+  struct thread* t1 = list_entry(a, struct thread, sleep_elem);
+  struct thread* t2 = list_entry(b, struct thread, sleep_elem);
+  return t1->sleep_time < t2->sleep_time;
+}
+

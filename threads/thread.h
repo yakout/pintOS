@@ -88,11 +88,20 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    int original_priority;              /* Used for donation reversal
+    int original_priority;              /* Used for donation reversal. */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+
+
+    struct list_elem sleep_elem;        /* List element for sleep list. */
+
+    struct list lock_list;              /* List for the lock thread aquires. */
+
+    struct lock *lock_waiting_for;       /* lock I am waiting to aquire. */
+
+
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

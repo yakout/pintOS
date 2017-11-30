@@ -61,7 +61,7 @@ bool thread_mlfqs;
 
 static void kernel_thread (thread_func *, void *aux);
 
-static list_less_func comparator;
+static list_less_func max_comparator;
 
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
@@ -247,23 +247,14 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  //list_push_back (&ready_list, &t->elem);
-  list_insert_ordered(&ready_list, &t->elem, comparator, NULL);
-  t->status = THREAD_READY;
 
-  struct list_elem *a =list_front (&ready_list);
-  struct thread* top_thread = list_entry(a, struct thread, elem);
-  struct thread* running_thread = thread_current();
+  list_insert_ordered (&ready_list,&t->elem,max_comparator,NULL);
   
-  if(top_thread->priority > running_thread->priority){
-    // update running thread to insert into ready queue
-    struct thread *cur = running_thread ();
-    list_insert_ordered(&ready_list, &cur->elem, comparator, NULL);
-    cur->status = THREAD_READY;
-    schedule();
-  }
-
+  t->status = THREAD_READY;
+    
   intr_set_level (old_level);
+
+  thread_yield();
 }
 
 /* Returns the name of the running thread. */
@@ -360,6 +351,10 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  struct thread* t = list_entry(list_front(&ready_list),struct thread,elem);
+  if(t->priority > thread_current()->priority){
+    thread_yield();
+  }
 }
 
 /* Returns the current thread's priority. */
@@ -486,6 +481,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->original_priority = priority;
   t->magic = THREAD_MAGIC;
+  list_init(&t->lock_list);
   list_push_back (&all_list, &t->allelem);
 }
 
@@ -608,8 +604,8 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 
 /* Comparator used by priority scheduler insert operation */
-static bool comparator (const struct list_elem *a, const struct list_elem *b, void *aux){
+static bool max_comparator (const struct list_elem *a, const struct list_elem *b, void *aux){
    struct thread* t1 = list_entry(a, struct thread, elem);
    struct thread* t2 = list_entry(b, struct thread, elem);
-   return t1->priority < t2->priority;
+   return t1->priority > t2->priority;
 }

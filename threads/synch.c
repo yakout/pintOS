@@ -222,15 +222,15 @@ lock_acquire (struct lock *lock)
   bool success = lock_try_acquire(lock);
   if(!success){
 
+    list_push_front(&(lock->holder->lock_list),&lock->elem);
+
     thread_current()->lock_waiting_for = lock;
     
     donate(thread_current(),lock);
     
     sema_down (&lock->semaphore);
   }
-  lock->holder = thread_current ();
   thread_current()->lock_waiting_for = NULL;
-  list_push_front(&thread_current ()->lock_list,lock->elem);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -267,13 +267,14 @@ lock_release (struct lock *lock)
   lock->holder = NULL;
 
   /* remove current lock from current_thread list of locks. */
-  list_remove(&lock->elem);
+  if(!list_empty(&lock->semaphore.waiters))
+    list_remove(&lock->elem);
 
   
   /* loop over list and take the highest make its priority = donated. */
   // there is a function called list_max that take the list and the function.
   if(!list_empty(&thread_current()->lock_list)){
-   
+     
    struct list_elem *max = list_max(&thread_current()->lock_list,less_priority_lock,NULL);
 
    struct lock *lock_highest_priority = list_entry(max,struct lock, elem);
@@ -287,9 +288,10 @@ lock_release (struct lock *lock)
    }else{
     thread_current()->priority = thread_current()->original_priority;
    }
-   
+  
+
   }else{
-    current_thread()->priority = thread_current()->original_priority;
+    thread_current()->priority = thread_current()->original_priority;
   }
 
   sema_up (&lock->semaphore);
@@ -424,14 +426,14 @@ donate(struct thread *t, struct lock *lock){
 static bool
 less_priority(const struct list_elem *a,const struct list_elem *b,void *aux){
   struct thread *t1 = list_entry(a,struct thread , elem);
-  struct thread *t2 = list_entry(a,struct thread , elem);
-  return t1->priority < t2->priority;
+  struct thread *t2 = list_entry(b,struct thread , elem);
+  return t1->priority > t2->priority;
 }
 
 static bool
 less_priority_lock(const struct list_elem *a,const struct list_elem *b,void *aux){
   struct lock *l1 = list_entry(a,struct lock , elem);
-  struct lock *l2 = list_entry(a,struct lock , elem);
+  struct lock *l2 = list_entry(b,struct lock , elem);
   const struct list_elem *e1 = list_front(&l1->semaphore.waiters);
   const struct list_elem *e2 = list_front(&l2->semaphore.waiters);
   return less_priority(e1,e2,NULL);

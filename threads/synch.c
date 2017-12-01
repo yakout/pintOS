@@ -58,7 +58,7 @@ sema_init (struct semaphore *sema, unsigned value)
   sema->value = value;
   list_init (&sema->waiters);
   //sema->hook=NULL;
-  sema->holder=NULL;
+  //sema->holder=NULL;
 }
 
 /* Down or "P" operation on a semaphore.  Waits for SEMA's value
@@ -77,19 +77,19 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
 
   while (sema->value == 0){
-      printf("\nWait on Semaphore ++++++++++++++++\n");
+      //printf("\nWait on Semaphore ++++++++++++++++\n");
       list_push_back (&sema->waiters, &thread_current()->elem);
-      thread_current()->lock_waiting_for=&sema;
-      donate(thread_current(), &sema);
-      printf("\nbrake out from donate ************\n");
+      //thread_current()->lock_waiting_for=&sema;
+      //donate(thread_current(), &sema);
+      //printf("\nbrake out from donate ************\n");
       thread_block ();
   }
 
   //printf("\nmain woke up**********************\n");
   sema->value--;
-  sema->holder = thread_current ();
-  list_push_back (&thread_current()->lock_list, &sema->hook);
-  thread_current()->lock_waiting_for=&null_sema;
+  //sema->holder = thread_current ();
+  //list_push_back (&thread_current()->lock_list, &sema->hook);
+  //thread_current()->lock_waiting_for=&null_sema;
   intr_set_level (old_level);
 }
 
@@ -127,6 +127,8 @@ void
 sema_up (struct semaphore *sema) 
 {
 
+  //printf("\nsema up called ****************\n");
+
   //printf("\ncalling thread : %s\n", thread_current()->name);
 
   enum intr_level old_level;
@@ -137,9 +139,9 @@ sema_up (struct semaphore *sema)
   sema->value++;
 
   // revert thread priority if there's a donation
-  list_remove(&sema->hook);
-  sema->holder=NULL;
-  thread_revert_priority(thread_current());
+  //list_remove(&sema->hook);
+  //sema->holder=NULL;
+  //thread_revert_priority(thread_current());
 
   // wakeup one of the waiters
   if (!list_empty (&sema->waiters)){
@@ -148,7 +150,7 @@ sema_up (struct semaphore *sema)
     struct list_elem *e=list_max(&sema->waiters, priority_less_comparator, NULL);
     struct thread *wakeup = list_entry(e, struct thread, elem);
     list_remove(e);
-    wakeup->lock_waiting_for=&null_sema;
+    //wakeup->lock_waiting_for=&null_sema;
 
     thread_unblock (wakeup);
   }

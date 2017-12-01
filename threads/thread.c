@@ -121,7 +121,7 @@ thread_start (void)
   /* Wait for the idle thread to initialize idle_thread. */
   sema_down (&idle_started);
 
-  printf("\nESCAPED FROM SEMA DOWN ***********-*-*\n");
+  //printf("\nESCAPED FROM SEMA DOWN ***********-*-*\n");
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -229,14 +229,12 @@ void
 thread_block (void) 
 {
 
-  //printf("\nWho called block again : %s\n", thread_current()->name);
+  //printf("\nWho called block : %s\n", thread_current()->name);
 
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
 
   thread_current ()->status = THREAD_BLOCKED;
-    
-  printf("\nblock called\n");
 
   schedule ();
 }
@@ -253,7 +251,7 @@ thread_block (void)
 void
 thread_unblock (struct thread *t) 
 {
-  printf("\nunblock called\n");
+  //printf("\nunblock called\n");
   enum intr_level old_level;
   ASSERT (is_thread (t));
 
@@ -262,7 +260,7 @@ thread_unblock (struct thread *t)
 
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
-;
+
   if(t->priority > thread_current()->priority){
     //printf("\nyield called\n");
     thread_yield();
@@ -536,7 +534,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->base_priority = priority;
   t->magic = THREAD_MAGIC;
-  t->lock_waiting_for=&null_sema;
+  //t->lock_waiting_for=&null_sema;
   list_init(&t->lock_list); 
   list_push_back (&all_list, &t->allelem);
 }

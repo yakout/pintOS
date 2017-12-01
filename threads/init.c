@@ -119,8 +119,8 @@ main (void)
 #endif
 
   /* Start thread scheduler and enable interrupts. */
-  printf("\nInitializing System **********************\n");
   thread_start ();
+  //printf("\nbreak out from boot problem **********************\n");
   serial_init_queue ();
   timer_calibrate ();
 

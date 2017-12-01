@@ -118,10 +118,10 @@ thread_start (void)
   /* Start preemptive thread scheduling. */
   intr_enable ();
 
-  //printf("\nVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV\n");
-
   /* Wait for the idle thread to initialize idle_thread. */
   sema_down (&idle_started);
+
+  printf("\nESCAPED FROM SEMA DOWN ***********-*-*\n");
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -236,7 +236,7 @@ thread_block (void)
 
   thread_current ()->status = THREAD_BLOCKED;
     
-  //printf("\nblock called\n");
+  printf("\nblock called\n");
 
   schedule ();
 }
@@ -253,7 +253,7 @@ thread_block (void)
 void
 thread_unblock (struct thread *t) 
 {
-  //printf("\nunblock called\n");
+  printf("\nunblock called\n");
   enum intr_level old_level;
   ASSERT (is_thread (t));
 
@@ -389,7 +389,7 @@ thread_set_priority (int new_priority)
   thread_revert_priority(thread_current());
 
   //printf("\nEntered Here **********************\n");
-  
+
   if(new_priority>thread_current()->priority){
     thread_current ()->priority = new_priority;
   }
@@ -536,6 +536,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->base_priority = priority;
   t->magic = THREAD_MAGIC;
+  t->lock_waiting_for=&null_sema;
   list_init(&t->lock_list); 
   list_push_back (&all_list, &t->allelem);
 }
@@ -702,7 +703,6 @@ thread_revert_priority(struct thread *t)
     return;
   }
 
-  printf("\nEntered Here **********************\n");
   // thread holding some locks
   struct list_elem *e=list_max(&t->lock_list, lock_list_less_comparator, NULL);
   struct semaphore* sema = list_entry(e, struct semaphore, hook);
@@ -721,7 +721,7 @@ thread_revert_priority(struct thread *t)
 }
 
 
-/* comapres two threads by priority */
+/* compares two semaphores by priority of top waiting thread */
 bool 
 lock_list_less_comparator (const struct list_elem *a, const struct list_elem *b, void *aux)
 {
@@ -747,7 +747,7 @@ lock_list_less_comparator (const struct list_elem *a, const struct list_elem *b,
   if(cond1==1&&cond2==0){
     return 1;
   }
-  return 1;
+  return 0;
 
   
 }

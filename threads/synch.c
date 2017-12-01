@@ -35,7 +35,7 @@
 
 
 static void donate(struct thread *blocked_thread, struct semaphore *sema);
-
+struct semaphore *null_sema;
 
 extern struct list ready_list;
 extern list_less_func priority_less_comparator;
@@ -57,6 +57,8 @@ sema_init (struct semaphore *sema, unsigned value)
 
   sema->value = value;
   list_init (&sema->waiters);
+  //sema->hook=NULL;
+  sema->holder=NULL;
 }
 
 /* Down or "P" operation on a semaphore.  Waits for SEMA's value
@@ -70,19 +72,24 @@ void
 sema_down (struct semaphore *sema) 
 {
   enum intr_level old_level;
-
   ASSERT (sema != NULL);
   ASSERT (!intr_context ());
   old_level = intr_disable ();
 
   while (sema->value == 0){
+      printf("\nWait on Semaphore ++++++++++++++++\n");
       list_push_back (&sema->waiters, &thread_current()->elem);
-      //donate(thread_current(), &sema);
+      thread_current()->lock_waiting_for=&sema;
+      donate(thread_current(), &sema);
+      printf("\nbrake out from donate ************\n");
       thread_block ();
   }
 
+  //printf("\nmain woke up**********************\n");
   sema->value--;
-  //list_push_back (&thread_current()->lock_list, &sema->hook);
+  sema->holder = thread_current ();
+  list_push_back (&thread_current()->lock_list, &sema->hook);
+  thread_current()->lock_waiting_for=&null_sema;
   intr_set_level (old_level);
 }
 
@@ -119,6 +126,9 @@ sema_try_down (struct semaphore *sema)
 void
 sema_up (struct semaphore *sema) 
 {
+
+  //printf("\ncalling thread : %s\n", thread_current()->name);
+
   enum intr_level old_level;
   ASSERT (sema != NULL);
   old_level = intr_disable ();
@@ -127,15 +137,18 @@ sema_up (struct semaphore *sema)
   sema->value++;
 
   // revert thread priority if there's a donation
-  //list_remove(&sema->hook);
-  //thread_revert_priority(thread_current());
+  list_remove(&sema->hook);
+  sema->holder=NULL;
+  thread_revert_priority(thread_current());
 
   // wakeup one of the waiters
   if (!list_empty (&sema->waiters)){
 
+    //printf("\nfound some waiters **********************\n");
     struct list_elem *e=list_max(&sema->waiters, priority_less_comparator, NULL);
     struct thread *wakeup = list_entry(e, struct thread, elem);
-    //list_remove(e);
+    list_remove(e);
+    wakeup->lock_waiting_for=&null_sema;
 
     thread_unblock (wakeup);
   }
@@ -368,8 +381,11 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 
 static void
 donate(struct thread *blocked_thread, struct semaphore *sema){
+  //printf("\ndonate called  *******************\n");
+  //printf("\nWho Called Donate : %s\n", thread_current()->name);
   // base case
-  if(sema == NULL){
+  if(sema == null_sema){
+    printf("\nSema Holder = Null ***********\n");
     // this thread must be wating in ready list
     // if(blocked_thread->priority > thread_current()->priority)
     return;

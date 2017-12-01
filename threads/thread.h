@@ -94,7 +94,7 @@ struct thread
     int priority;                       /* Priority. */
     int base_priority;                  /* Used for donation reversal. */
     struct list lock_list;              /* List for the lock thread aquires. */
-    struct lock *lock_waiting_for;      /* lock I am waiting to aquire. */
+    struct semaphore *lock_waiting_for; /* lock I am waiting to aquire. */
 
 
 
@@ -111,6 +111,7 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
+extern struct semaphore *null_sema;
 
 void thread_init (void);
 void thread_start (void);

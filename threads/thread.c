@@ -61,7 +61,8 @@ bool thread_mlfqs;
 
 static void kernel_thread (thread_func *, void *aux);
 
-static list_less_func max_comparator;
+static list_less_func priority_less_comparator;
+static list_less_func lock_list_less_comparator;
 
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
@@ -72,6 +73,8 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+
+static void thread_revert_priority(struct thread *t);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -137,8 +140,8 @@ thread_tick (void)
     kernel_ticks++;
 
   /* Enforce preemption. */
-  /*if (++thread_ticks >= TIME_SLICE)
-    intr_yield_on_return ();*/
+  if (++thread_ticks >= TIME_SLICE)
+    intr_yield_on_return ();
 }
 
 /* Prints thread statistics. */
@@ -223,10 +226,16 @@ thread_create (const char *name, int priority,
 void
 thread_block (void) 
 {
+
+  //printf("\nWho called block again : %s\n", thread_current()->name);
+
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
 
   thread_current ()->status = THREAD_BLOCKED;
+    
+  //printf("\nblock called\n");
+
   schedule ();
 }
 
@@ -238,24 +247,31 @@ thread_block (void)
    be important: if the caller had disabled interrupts itself,
    it may expect that it can atomically unblock a thread and
    update other data. */
+
 void
 thread_unblock (struct thread *t) 
 {
+  //printf("\nunblock called\n");
   enum intr_level old_level;
-
   ASSERT (is_thread (t));
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
 
-  list_insert_ordered (&ready_list,&t->elem,max_comparator,NULL);
-  
+  list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
-    
+;
+  if(t->priority > thread_current()->priority){
+    //printf("\nyield called\n");
+    thread_yield();
+    //printf("\nback in unblock\n");
+  }
   intr_set_level (old_level);
 
-  thread_yield();
 }
+
+
+
 
 /* Returns the name of the running thread. */
 const char *
@@ -313,19 +329,28 @@ thread_exit (void)
 
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
+
+
 void
 thread_yield (void) 
 {
+  //print_info();
+  //printf("\nyield called\n");
   struct thread *cur = thread_current ();
   enum intr_level old_level;
   
   ASSERT (!intr_context ());
-
   old_level = intr_disable ();
-  if (cur != idle_thread) 
+
+  if (cur != idle_thread){
+    //printf("\nEntered Here\n");
     list_push_back (&ready_list, &cur->elem);
+  }
+  //print_info();
   cur->status = THREAD_READY;
+  //print_info();
   schedule ();
+  //printf("\nback in yield\n");
   intr_set_level (old_level);
 }
 
@@ -350,18 +375,50 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
-  struct thread* t = list_entry(list_front(&ready_list),struct thread,elem);
-  if(t->priority > thread_current()->priority){
+  enum intr_level old_level;
+  old_level = intr_disable ();
+
+  //printf("\nNew Priority : %d\n", new_priority);
+
+  // update base priority
+  thread_current ()->original_priority = new_priority;
+
+  // update effective priority
+  if(new_priority>thread_current()->priority){
+      thread_current ()->priority = new_priority;
+  }
+  // if locks i'm holding have no waiters
+  if(list_empty(&thread_current()->lock_list)){
+    /*
+      this function needs to be completed
+      how to know if no one waiting on any lock i'm holding
+    */
+    thread_current()->priority=new_priority;
+  }
+  thread_current()->lock_list;
+
+  // compare priority with top of ready queue
+  struct list_elem *e=list_max(&ready_list, priority_less_comparator, NULL);
+  struct thread *ready_top = list_entry(e, struct thread, elem);
+  //printf("\nReady Top : %s\n", ready_top->name);
+
+
+  // replace with "top thread in ready queue"
+  if(ready_top->priority > thread_current()->priority){
+    // relinquish CPU
+    //printf("\nEntered Here\n");
     thread_yield();
   }
+
+  intr_set_level (old_level);
+
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  return thread_current ()->original_priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -416,6 +473,8 @@ idle (void *idle_started_ UNUSED)
       /* Let someone else run. */
       intr_disable ();
       thread_block ();
+
+      //printf("\nfucking idle woke up ?????\n");
 
       /* Re-enable interrupts and wait for the next one.
 
@@ -481,7 +540,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->original_priority = priority;
   t->magic = THREAD_MAGIC;
-  list_init(&t->lock_list);
+  list_init(&t->lock_list); 
   list_push_back (&all_list, &t->allelem);
 }
 
@@ -506,10 +565,15 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
-  if (list_empty (&ready_list))
+  if (list_empty (&ready_list)){
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  }
+  else{
+    struct list_elem *e=list_max(&ready_list, priority_less_comparator, NULL);
+    struct thread *next = list_entry(e, struct thread, elem);
+    list_remove(e);
+    return next;
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -556,6 +620,7 @@ thread_schedule_tail (struct thread *prev)
       ASSERT (prev != cur);
       palloc_free_page (prev);
     }
+
 }
 
 /* Schedules a new process.  At entry, interrupts must be off and
@@ -568,17 +633,26 @@ thread_schedule_tail (struct thread *prev)
 static void
 schedule (void) 
 {
+  //print_info();
   struct thread *cur = running_thread ();
   struct thread *next = next_thread_to_run ();
   struct thread *prev = NULL;
-
+  //printf("\nrunning thread : %s\n", prev->name);
+  //printf("\nnext to run : %s\n", next->name);
+  //printf("\nschedule called\n");
   ASSERT (intr_get_level () == INTR_OFF);
   ASSERT (cur->status != THREAD_RUNNING);
   ASSERT (is_thread (next));
 
-  if (cur != next)
+  if (cur != next){
+    //printf("Yes");
     prev = switch_threads (cur, next);
+    //printf("\nswitched threads *******\n");
+  }
   thread_schedule_tail (prev);
+  //struct thread *x = running_thread ();
+  //printf("\ncontrols CPU 11: %s\n", x->name);
+
 }
 
 /* Returns a tid to use for a new thread. */
@@ -603,9 +677,80 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 
 
-/* Comparator used by priority scheduler insert operation */
-static bool max_comparator (const struct list_elem *a, const struct list_elem *b, void *aux){
+/* comapres two threads by priority */
+static bool 
+priority_less_comparator (const struct list_elem *a, const struct list_elem *b, void *aux)
+{
    struct thread* t1 = list_entry(a, struct thread, elem);
    struct thread* t2 = list_entry(b, struct thread, elem);
-   return t1->priority > t2->priority;
+   return t1->priority < t2->priority;
+}
+
+
+void 
+print_info()
+{
+  struct list_elem *e=list_max(&ready_list, priority_less_comparator, NULL);
+  struct thread *next = list_entry(e, struct thread, elem);
+  printf("\n**********top priority thread : %s\n", next->name);
+  printf("current thread : %s**********\n", thread_current()->name);
+}
+
+
+static void
+thread_revert_priority(struct thread *t)
+{
+  // if no lock i'm holding
+  if(list_empty(&t->lock_list)){
+    t->priority=t->original_priority;
+    return;
+  }
+
+  // thread holding some locks
+  struct list_elem *e=list_max(&t->lock_list, lock_list_less_comparator, NULL);
+  struct semaphore* sema = list_entry(e, struct semaphore, elem);
+  
+  if(!list_empty(&sema->waiters)){
+    // semaphore has some waiters
+    struct list_elem* e1 = list_max(&sema->waiters, priority_less_comparator, NULL);
+    struct thread* high_priority_waiter = list_entry(e1, struct thread, elem);
+    if(high_priority_waiter->priority > t->priority){
+      t->priority = high_priority_waiter->priority;
+      return;
+    }
+  }
+  // no semaphore waiters or waiters have lower priorities
+  t->priority=t->original_priority;
+}
+
+
+/* comapres two threads by priority */
+static bool 
+lock_list_less_comparator (const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+  struct semaphore *sema1 = list_entry(a, struct semaphore, elem);
+  struct semaphore *sema2 = list_entry(b, struct semaphore, elem);
+
+  int cond1=list_empty(&sema1);
+  int cond2=list_empty(&sema2);
+
+  if(cond1==0&&cond2==0){
+    // both semaphore have waiter list
+    struct list_elem* e1 = list_max(&sema1->waiters, priority_less_comparator, NULL);
+    struct list_elem* e2 = list_max(&sema2->waiters, priority_less_comparator, NULL);
+
+    struct thread* t1 = list_entry(e1, struct thread, elem);
+    struct thread* t2 = list_entry(e2, struct thread, elem)
+
+    return t1->priority < t2->priority;
+  }
+  if(cond1==0&&cond2==1){
+    return 0;
+  }
+  if(cond1==1&&cond2==0){
+    return 1;
+  }
+  return 1;
+
+  
 }

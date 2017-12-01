@@ -61,8 +61,8 @@ bool thread_mlfqs;
 
 static void kernel_thread (thread_func *, void *aux);
 
-static list_less_func priority_less_comparator;
-static list_less_func lock_list_less_comparator;
+list_less_func priority_less_comparator;
+list_less_func lock_list_less_comparator;
 
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
@@ -74,7 +74,7 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
-static void thread_revert_priority(struct thread *t);
+void thread_revert_priority(struct thread *t);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -117,6 +117,8 @@ thread_start (void)
 
   /* Start preemptive thread scheduling. */
   intr_enable ();
+
+  //printf("\nVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV\n");
 
   /* Wait for the idle thread to initialize idle_thread. */
   sema_down (&idle_started);
@@ -381,27 +383,21 @@ thread_set_priority (int new_priority)
   //printf("\nNew Priority : %d\n", new_priority);
 
   // update base priority
-  thread_current ()->original_priority = new_priority;
+  thread_current ()->base_priority = new_priority;
 
   // update effective priority
+  thread_revert_priority(thread_current());
+
+  //printf("\nEntered Here **********************\n");
+  
   if(new_priority>thread_current()->priority){
-      thread_current ()->priority = new_priority;
+    thread_current ()->priority = new_priority;
   }
-  // if locks i'm holding have no waiters
-  if(list_empty(&thread_current()->lock_list)){
-    /*
-      this function needs to be completed
-      how to know if no one waiting on any lock i'm holding
-    */
-    thread_current()->priority=new_priority;
-  }
-  thread_current()->lock_list;
 
   // compare priority with top of ready queue
   struct list_elem *e=list_max(&ready_list, priority_less_comparator, NULL);
   struct thread *ready_top = list_entry(e, struct thread, elem);
   //printf("\nReady Top : %s\n", ready_top->name);
-
 
   // replace with "top thread in ready queue"
   if(ready_top->priority > thread_current()->priority){
@@ -418,7 +414,7 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->original_priority;
+  return thread_current ()->base_priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -538,7 +534,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->original_priority = priority;
+  t->base_priority = priority;
   t->magic = THREAD_MAGIC;
   list_init(&t->lock_list); 
   list_push_back (&all_list, &t->allelem);
@@ -678,7 +674,7 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 
 /* comapres two threads by priority */
-static bool 
+bool 
 priority_less_comparator (const struct list_elem *a, const struct list_elem *b, void *aux)
 {
    struct thread* t1 = list_entry(a, struct thread, elem);
@@ -697,18 +693,19 @@ print_info()
 }
 
 
-static void
+void
 thread_revert_priority(struct thread *t)
 {
   // if no lock i'm holding
   if(list_empty(&t->lock_list)){
-    t->priority=t->original_priority;
+    t->priority=t->base_priority;
     return;
   }
 
+  printf("\nEntered Here **********************\n");
   // thread holding some locks
   struct list_elem *e=list_max(&t->lock_list, lock_list_less_comparator, NULL);
-  struct semaphore* sema = list_entry(e, struct semaphore, elem);
+  struct semaphore* sema = list_entry(e, struct semaphore, hook);
   
   if(!list_empty(&sema->waiters)){
     // semaphore has some waiters
@@ -720,16 +717,16 @@ thread_revert_priority(struct thread *t)
     }
   }
   // no semaphore waiters or waiters have lower priorities
-  t->priority=t->original_priority;
+  t->priority=t->base_priority;
 }
 
 
 /* comapres two threads by priority */
-static bool 
+bool 
 lock_list_less_comparator (const struct list_elem *a, const struct list_elem *b, void *aux)
 {
-  struct semaphore *sema1 = list_entry(a, struct semaphore, elem);
-  struct semaphore *sema2 = list_entry(b, struct semaphore, elem);
+  struct semaphore *sema1 = list_entry(a, struct semaphore, hook);
+  struct semaphore *sema2 = list_entry(b, struct semaphore, hook);
 
   int cond1=list_empty(&sema1);
   int cond2=list_empty(&sema2);
@@ -740,7 +737,7 @@ lock_list_less_comparator (const struct list_elem *a, const struct list_elem *b,
     struct list_elem* e2 = list_max(&sema2->waiters, priority_less_comparator, NULL);
 
     struct thread* t1 = list_entry(e1, struct thread, elem);
-    struct thread* t2 = list_entry(e2, struct thread, elem)
+    struct thread* t2 = list_entry(e2, struct thread, elem);
 
     return t1->priority < t2->priority;
   }

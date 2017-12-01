@@ -87,15 +87,13 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
-    int original_priority;              /* Used for donation reversal. */
     struct list_elem allelem;           /* Hook the element to "all element" list {list of all elements in the system} */
-
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* Hook used to hook the element to only one of the lists {ready list, blocked list, sema list}*/
 
+    int priority;                       /* Priority. */
+    int base_priority;                  /* Used for donation reversal. */
     struct list lock_list;              /* List for the lock thread aquires. */
-
     struct lock *lock_waiting_for;      /* lock I am waiting to aquire. */
 
 

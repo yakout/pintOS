@@ -79,9 +79,9 @@ static tid_t allocate_tid (void);
 static void update_priority( struct thread *t, void * aux );
 static void update_recent_cpu(struct thread *t, void *aux);
 
-static int calculate_loadavg( void );
+static int calculate_load_avg( void );
 static int thread_calculate_priority(struct thread *t);
-static int thread_calculate_recentcpu(struct thread *t);
+static int thread_calculate_recent_cpu(struct thread *t);
 
 static int math_power(int number, int exponent);
 
@@ -108,7 +108,7 @@ thread_init (void)
   list_init (&all_list);
 
   /* Set up a thread structure for the running thread. */
-  load_avg=0;
+  load_avg=0; //math_power(2,BASE);
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
@@ -162,12 +162,13 @@ thread_tick (void)
     // update recent cpu
     thread_foreach (update_recent_cpu, NULL);
     //update load avg
-    load_avg=calculate_loadavg();
+    load_avg=calculate_load_avg();
+    printf("\nload_avg (after update)= %d\n", thread_get_load_avg());
   }
 
 
   if (++thread_ticks >= TIME_SLICE){
-    thread_yield();
+    intr_yield_on_return ();
   }
 
 
@@ -405,7 +406,7 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  return load_avg;
+  return (100*load_avg)/math_power(2,BASE);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -498,7 +499,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
-  t->recent_cpu=thread_calculate_recentcpu(t);
+  t->recent_cpu=thread_calculate_recent_cpu(t);
   t->priority = thread_calculate_priority(t);
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
@@ -626,13 +627,18 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
  
 /* calculate load avg of system*/
 static int
-calculate_loadavg( void )
+calculate_load_avg( void )
 {
   int coeff_a=(59*math_power(2,BASE))/60;
   int coeff_b=(1*math_power(2,BASE))/60;
 
-  int term_1=load_avg*(coeff_a/math_power(2,BASE));
-  int term_2=(coeff_b)*list_size(&ready_list);
+  int term_1=(59*load_avg)/60; //(coeff_a/math_power(2,BASE));
+
+  int ready_threads=list_size(&ready_list);
+  if(thread_current()!=idle_thread){
+    ready_threads+=1;
+  }
+  int term_2=(coeff_b)*ready_threads;
 
   return term_1+term_2;
 }
@@ -640,7 +646,7 @@ calculate_loadavg( void )
 
 /* calculate recent cpu of thread*/
 static int
-thread_calculate_recentcpu(struct thread *t)
+thread_calculate_recent_cpu(struct thread *t)
 {
   int numerator=load_avg*2;
   int denominator=numerator+(1*math_power(2,BASE));
@@ -675,7 +681,7 @@ update_priority( struct thread *t, void * aux )
 static void
 update_recent_cpu(struct thread *t, void *aux)
 {
-  t->recent_cpu=thread_calculate_recentcpu(t);
+  t->recent_cpu=thread_calculate_recent_cpu(t);
 }
 
 

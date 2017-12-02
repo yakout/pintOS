@@ -20,12 +20,18 @@ test_mlfqs_load_1 (void)
   int64_t start_time;
   int elapsed;
   int load_avg;
+
   
-  ASSERT (thread_mlfqs);
+  
+  //ASSERT (thread_mlfqs);
 
   msg ("spinning for up to 45 seconds, please wait...");
 
   start_time = timer_ticks ();
+
+  printf("\nBefore Entering Loop ******************\n");
+  printf("\nload_avg initial = %d\n", thread_get_load_avg());
+
   for (;;) 
     {
       load_avg = thread_get_load_avg ();

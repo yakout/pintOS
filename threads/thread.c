@@ -22,11 +22,14 @@
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
-static struct list ready_list;
+struct list ready_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
+
+/* List of all sleeping processes. */
+struct list sleep_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -73,6 +76,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+static bool comparator (const struct list_elem *a, const struct list_elem *b, void *aux);
 
 void thread_revert_priority(struct thread *t);
 
@@ -97,6 +101,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&sleep_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -141,9 +146,11 @@ thread_tick (void)
   else
     kernel_ticks++;
 
+  update_sleepers ();
+
   /* Enforce preemption. */
-  if (++thread_ticks >= TIME_SLICE)
-    intr_yield_on_return ();
+  // if (++thread_ticks >= TIME_SLICE)
+    // intr_yield_on_return ();
 }
 
 /* Prints thread statistics. */
@@ -263,7 +270,11 @@ thread_unblock (struct thread *t)
 
   if(t->priority > thread_current()->priority){
     //printf("\nyield called\n");
-    thread_yield();
+    if (intr_context()) {
+      intr_yield_on_return();
+    } else {
+      // do nothing
+    }
     //printf("\nback in unblock\n");
   }
   intr_set_level (old_level);
@@ -533,6 +544,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->base_priority = priority;
+  t->sleep_time = 0;
   t->magic = THREAD_MAGIC;
   //t->lock_waiting_for=&null_sema;
   list_init(&t->lock_list); 
@@ -670,8 +682,6 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 
 
-
-
 /* comapres two threads by priority */
 bool 
 priority_less_comparator (const struct list_elem *a, const struct list_elem *b, void *aux)
@@ -749,3 +759,40 @@ lock_list_less_comparator (const struct list_elem *a, const struct list_elem *b,
 
   
 }
+
+void 
+update_sleepers()
+{
+  // no need to disable interupts since we are at external iterupt (timer_interupt)
+
+  /* if there is no sleepers, return */
+  if (list_empty (&sleep_list)) return;
+
+  struct list_elem *e;
+  for (e = list_begin (&sleep_list); e != list_end (&sleep_list); e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, elem);
+      if (-- (t->sleep_time) == 0) {
+        e = list_prev (list_remove (e));
+        thread_unblock (t);
+      }
+    }
+}
+
+void
+thread_sleep(int64_t ticks) 
+{  
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  if (ticks <= 0)
+    return;
+
+  struct thread *t = thread_current ();
+  t->sleep_time = ticks;
+
+  list_push_back (&sleep_list, &t->elem);
+
+  /* this will change the current thread state to THREAD_BLOCKED and then call schedule () */
+  thread_block ();
+}
+

@@ -96,6 +96,7 @@ struct thread
     struct list lock_list;              /* List for the lock thread aquires. */
     struct semaphore *lock_waiting_for; /* lock I am waiting to aquire. */
 
+    int sleep_time;                     /* # of ticks to sleep */
 
 
 #ifdef USERPROG
@@ -143,5 +144,8 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+void thread_sleep(int64_t ticks);
+void update_sleepers();
 
 #endif /* threads/thread.h */

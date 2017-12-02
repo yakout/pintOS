@@ -92,7 +92,6 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
     int sleep_time;                     /* # of ticks to sleep */
-    struct list_elem sleep_elem;        /* List element for sleep list. */
     
     int priority;                       /* Thread priority. */
     int recent_cpu;                     /* Thread recent cpu time*/

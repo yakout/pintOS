@@ -421,7 +421,7 @@ thread_get_load_avg (void)
 int
 thread_get_recent_cpu (void) 
 {
-  return thread_current()->recent_cpu;
+  return (100*thread_current()->recent_cpu)/math_power(2,BASE);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -657,11 +657,14 @@ calculate_load_avg( void )
 static int
 thread_calculate_recent_cpu(struct thread *t)
 {
-  int numerator=load_avg*2;
+  /*int numerator=load_avg*2;
   int denominator=numerator+(1*math_power(2,BASE));
 
-  int coeff_a=numerator/(denominator/math_power(2,BASE));
-  int term_1=(t->recent_cpu)*(coeff_a/math_power(2,BASE));
+  int coeff_a=numerator/(denominator/math_power(2,BASE));*/
+
+  int numerator=2*(load_avg/math_power(2,7))*(t->recent_cpu/math_power(2,7));
+  int denominator=2*load_avg+(1*math_power(2,BASE));
+  int term_1=(numerator)/(denominator/math_power(2,14));
 
   return term_1+(t->nice*math_power(2,BASE));
 }
@@ -719,8 +722,7 @@ math_power(int number, int exponent)
   return result;
 }
 
-
-void 
+void
 update_sleepers()
 {
   // no need to disable interupts since we are at external iterupt (timer_interupt)
@@ -731,9 +733,9 @@ update_sleepers()
   struct list_elem *e;
   for (e = list_begin (&sleep_list); e != list_end (&sleep_list); e = list_next (e))
     {
-      struct thread *t = list_entry (e, struct thread, sleep_elem);
+      struct thread *t = list_entry (e, struct thread, elem);
       if (-- (t->sleep_time) == 0) {
-        list_remove (e);
+        e = list_prev (list_remove (e));
         thread_unblock (t);
       }
     }
@@ -750,7 +752,7 @@ thread_sleep(int64_t ticks)
   struct thread *t = thread_current ();
   t->sleep_time = ticks;
 
-  list_insert_ordered (&sleep_list, &t->sleep_elem, priority_less_comparator, NULL);
+  list_push_back (&sleep_list, &t->elem);
 
   /* this will change the current thread state to THREAD_BLOCKED and then call schedule () */
   thread_block ();

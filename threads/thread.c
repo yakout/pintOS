@@ -29,6 +29,10 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+
+/* List of all sleeping processes. */
+struct list sleep_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -106,6 +110,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&sleep_list);
 
   /* Set up a thread structure for the running thread. */
   load_avg=0; //math_power(2,BASE);
@@ -148,6 +153,9 @@ thread_tick (void)
 #endif
   else
     kernel_ticks++;
+
+  /* update sleeping threads time */
+  update_sleepers ();
 
   /* update running thread recent cpu every tick*/
   t->recent_cpu+=1;
@@ -281,7 +289,7 @@ thread_unblock (struct thread *t)
 
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
-  
+
   intr_set_level (old_level);
 }
 
@@ -501,6 +509,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->recent_cpu=thread_calculate_recent_cpu(t);
   t->priority = thread_calculate_priority(t);
+  t->sleep_time=0;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 }
@@ -708,4 +717,41 @@ math_power(int number, int exponent)
   }
 
   return result;
+}
+
+
+void 
+update_sleepers()
+{
+  // no need to disable interupts since we are at external iterupt (timer_interupt)
+
+  /* if there is no sleepers, return */
+  if (list_empty (&sleep_list)) return;
+
+  struct list_elem *e;
+  for (e = list_begin (&sleep_list); e != list_end (&sleep_list); e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, sleep_elem);
+      if (-- (t->sleep_time) == 0) {
+        list_remove (e);
+        thread_unblock (t);
+      }
+    }
+}
+
+
+void
+thread_sleep(int64_t ticks) 
+{  
+  ASSERT (intr_get_level () == INTR_OFF);
+  if (ticks <= 0)
+    return;
+
+  struct thread *t = thread_current ();
+  t->sleep_time = ticks;
+
+  list_insert_ordered (&sleep_list, &t->sleep_elem, priority_less_comparator, NULL);
+
+  /* this will change the current thread state to THREAD_BLOCKED and then call schedule () */
+  thread_block ();
 }

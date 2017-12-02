@@ -91,7 +91,9 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-
+    int sleep_time;                     /* # of ticks to sleep */
+    struct list_elem sleep_elem;        /* List element for sleep list. */
+    
     int priority;                       /* Thread priority. */
     int recent_cpu;                     /* Thread recent cpu time*/
     int nice;                           /* Thread nice value*/
@@ -143,9 +145,7 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 
-static int calculate_loadavg( void );
-static int thread_calculate_priority(struct thread *t);
-static int thread_calculate_recentcpu(struct thread *t);
+
 
 
 #endif /* threads/thread.h */

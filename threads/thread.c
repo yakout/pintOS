@@ -607,7 +607,6 @@ update_sleepers()
     {
       struct thread *t = list_entry (e, struct thread, elem);
       if (-- (t->sleep_time) == 0) {
-        list_remove (e);
         e = list_prev (list_remove (e));
         thread_unblock (t);
       }

@@ -163,7 +163,7 @@ thread_tick (void)
     thread_foreach (update_recent_cpu, NULL);
     //update load avg
     load_avg=calculate_load_avg();
-    printf("\nload_avg (after update)= %d\n", thread_get_load_avg());
+    //printf("\nload_avg (after update)= %d\n", thread_get_load_avg());
   }
 
 
@@ -275,13 +275,13 @@ void
 thread_unblock (struct thread *t) 
 {
   enum intr_level old_level;
-
   ASSERT (is_thread (t));
-
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
+
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
+  
   intr_set_level (old_level);
 }
 

@@ -605,9 +605,10 @@ update_sleepers()
   struct list_elem *e;
   for (e = list_begin (&sleep_list); e != list_end (&sleep_list); e = list_next (e))
     {
-      struct thread *t = list_entry (e, struct thread, sleep_elem);
+      struct thread *t = list_entry (e, struct thread, elem);
       if (-- (t->sleep_time) == 0) {
         list_remove (e);
+        e = list_prev (list_remove (e));
         thread_unblock (t);
       }
     }
@@ -624,19 +625,10 @@ thread_sleep(int64_t ticks)
   struct thread *t = thread_current ();
   t->sleep_time = ticks;
 
-  list_insert_ordered (&sleep_list, &t->sleep_elem, comparator, NULL);
+  list_push_back (&sleep_list, &t->elem);
 
   /* this will change the current thread state to THREAD_BLOCKED and then call schedule () */
   thread_block ();
 }
 
-/* Comparator used by sleep_list insert operation */
-static bool
-comparator (const struct list_elem *a,
-                             const struct list_elem *b, void *aux)
-{
-  struct thread* t1 = list_entry(a, struct thread, sleep_elem);
-  struct thread* t2 = list_entry(b, struct thread, sleep_elem);
-  return t1->sleep_time < t2->sleep_time;
-}
 

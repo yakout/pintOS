@@ -83,6 +83,8 @@ static int calculate_loadavg( void );
 static int thread_calculate_priority(struct thread *t);
 static int thread_calculate_recentcpu(struct thread *t);
 
+static int math_power(int number, int exponent);
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -623,13 +625,13 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
  
 /* calculate load avg of system*/
-int
+static int
 calculate_loadavg( void )
 {
-  int coeff_a=(59*(2**BASE))/60;
-  int coeff_b=(1*(2**BASE))/60;
+  int coeff_a=(59*math_power(2,BASE))/60;
+  int coeff_b=(1*math_power(2,BASE))/60;
 
-  int term_1=load_avg*(coeff_a/(2**BASE));
+  int term_1=load_avg*(coeff_a/math_power(2,BASE));
   int term_2=(coeff_b)*list_size(&ready_list);
 
   return term_1+term_2;
@@ -637,29 +639,29 @@ calculate_loadavg( void )
 
 
 /* calculate recent cpu of thread*/
-int
+static int
 thread_calculate_recentcpu(struct thread *t)
 {
   int numerator=load_avg*2;
-  int denominator=numerator+(1*(2**BASE));
+  int denominator=numerator+(1*math_power(2,BASE));
 
-  int coeff_a=numerator/(denominator/(2**BASE));
-  int term_1=(t->recent_cpu)*(coeff_a/(2**BASE));
+  int coeff_a=numerator/(denominator/math_power(2,BASE));
+  int term_1=(t->recent_cpu)*(coeff_a/math_power(2,BASE));
 
-  return term_1+(t->nice*(2**BASE));
+  return term_1+(t->nice*math_power(2,BASE));
 }
 
 
 /* calculate priority of thread*/
-int 
+static int 
 thread_calculate_priority(struct thread *t)
 {
   int term_2=(t->recent_cpu)/4;
-  int term_3=(2*(2**BASE))*(t->nice);
+  int term_3=(2*math_power(2,BASE))*(t->nice);
 
   int float_term=term_2+term_3;
 
-  return PRI_MAX-(float_term/(2**BASE));
+  return PRI_MAX-(float_term/math_power(2,BASE));
 }
 
 
@@ -685,4 +687,19 @@ priority_less_comparator (const struct list_elem *a, const struct list_elem *b, 
    struct thread* t1 = list_entry(a, struct thread, elem);
    struct thread* t2 = list_entry(b, struct thread, elem);
    return t1->priority < t2->priority;
+}
+
+
+static int 
+math_power(int number, int exponent)
+{
+  int i;
+  int result=number;
+  
+  for(i=2; i<=exponent; i++)
+  {
+    result=result*number;
+  }
+
+  return result;
 }

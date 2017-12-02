@@ -60,6 +60,8 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
+list_less_func priority_less_comparator;
+
 static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
@@ -71,6 +73,15 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+
+
+#define BASE 14
+static void update_priority( struct thread *t, void * aux );
+static void update_recent_cpu(struct thread *t, void *aux);
+
+static int calculate_loadavg( void );
+static int thread_calculate_priority(struct thread *t);
+static int thread_calculate_recentcpu(struct thread *t);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -136,12 +147,15 @@ thread_tick (void)
   else
     kernel_ticks++;
 
-  /* calculate all threads' priority every 4 ticks*/
+  /* update running thread recent cpu every tick*/
+  t->recent_cpu+=1;
+
+  // calculate all threads' priority every 4 ticks
   if(timer_ticks()%TIME_SLICE==0){
     thread_foreach (update_priority, NULL);
   }
 
-  /* calculate recent cpu every 1 second, and update load avg*/
+  // calculate recent cpu every 1 second, and update load avg
   if(timer_ticks()%TIMER_FREQ==0){
     // update recent cpu
     thread_foreach (update_recent_cpu, NULL);
@@ -149,8 +163,6 @@ thread_tick (void)
     load_avg=calculate_loadavg();
   }
 
-  /* update running thread recent cpu every tick*/
-  t->recent_cpu+=1;
 
   if (++thread_ticks >= TIME_SLICE){
     thread_yield();
@@ -331,12 +343,12 @@ thread_yield (void)
 {
   struct thread *cur = thread_current ();
   enum intr_level old_level;
-  
   ASSERT (!intr_context ());
-
   old_level = intr_disable ();
-  if (cur != idle_thread) 
+
+  if (cur != idle_thread) {
     list_push_back (&ready_list, &cur->elem);
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -391,16 +403,14 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  return fixedpoint_multiply(load_avg, int_to_fixedpoint(100))->value;
+  return load_avg;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  struct thread *t=thread_current();
-  return fixedpoint_multiply(t->recent_cpu, int_to_fixedpoint(100))->value;
-
+  return thread_current()->recent_cpu;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -486,7 +496,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
-  t->priority = thread_calculate_priority(t, NULL);
+  t->recent_cpu=thread_calculate_recentcpu(t);
+  t->priority = thread_calculate_priority(t);
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 }
@@ -512,11 +523,15 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
-  if (list_empty (&ready_list))
+  if (list_empty (&ready_list)){
     return idle_thread;
-  else
 
-    return list_max(&ready_list, comparator, NULL);
+  }else{
+    struct list_elem *e=list_max(&ready_list, priority_less_comparator, NULL);
+    struct thread *next = list_entry(e, struct thread, elem);
+    list_remove(e);
+    return next;
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -606,80 +621,67 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-
-
-
-
+ 
 /* calculate load avg of system*/
-static struct fixed_point 
+int
 calculate_loadavg( void )
 {
-  struct fixed_point coeff_1=int_to_fixedpoint(1);
-  struct fixed_point coeff_59=int_to_fixedpoint(59);
-  struct fixed_point coeff_60=int_to_fixedpoint(60);
+  int coeff_a=(59*(2**BASE))/60;
+  int coeff_b=(1*(2**BASE))/60;
 
-  struct fixed_point coeff_a=divide(coeff_59, coeff_60);
-  struct fixed_point coeff_b=divide(coeff_1, coeff_60);
+  int term_1=load_avg*(coeff_a/(2**BASE));
+  int term_2=(coeff_b)*list_size(&ready_list);
 
-  struct fixed_point term_1=multiply(load_avg, coeff_a);
-  struct fixed_point term_2=multiply(list_size(&ready_list), coeff_b);
-
-  return add(term_1, term_2);
+  return term_1+term_2;
 }
 
 
-/* calculate recent cou of thread*/
-static struct fixed_point
+/* calculate recent cpu of thread*/
+int
 thread_calculate_recentcpu(struct thread *t)
 {
-  struct fixed_point coeff_nice=int_to_fixedpoint(thread_get_nice());
-  struct fixed_point coeff_1=int_to_fixedpoint(1);
-  struct fixed_point coeff_2=int_to_fixedpoint(2);
+  int numerator=load_avg*2;
+  int denominator=numerator+(1*(2**BASE));
 
-  struct fixed_point numerator = fixedpoint_multiply(load_avg, coeff_2);
-  struct fixed_point denominator = fixedpoint_add(numerator, coeff_1);
+  int coeff_a=numerator/(denominator/(2**BASE));
+  int term_1=(t->recent_cpu)*(coeff_a/(2**BASE));
 
-  struct fixed_point coeff_a = fixedpoint_divide(numerator, denominator);
-  struct fixed_point term_1 = fixedpoint_multiply(coeff_a, t->recent_cpu);
-
-  return add(term_1, coeff_nice);
+  return term_1+(t->nice*(2**BASE));
 }
 
 
 /* calculate priority of thread*/
-static int 
+int 
 thread_calculate_priority(struct thread *t)
 {
-  struct fixed_point coeff_nice=int_to_fixedpoint(t->nice);
-  struct fixed_point coeff_2=int_to_fixedpoint(2);
-  struct fixed_point coeff_4=int_to_fixedpoint(4);
+  int term_2=(t->recent_cpu)/4;
+  int term_3=(2*(2**BASE))*(t->nice);
 
-  struct fixed_point term_2 = fixedpoint_divide(t->recent_cpu, coeff_4);
-  struct fixed_point term_3 = fixedpoint_multiply(coeff_nice, coeff_2);
+  int float_term=term_2+term_3;
 
-  struct fixed_point float_term = fixedpoint_add(term_2, term_3);  
-
-  return PRI_MAX-fixedpoint_to_int(float_term);
+  return PRI_MAX-(float_term/(2**BASE));
 }
 
 
 
-void update_priority( struct thread *t, void * aux ){
-
+static void
+update_priority( struct thread *t, void * aux )
+{
   t->priority=thread_calculate_priority(t);
-
 }
 
-void update_recent_cpu(struct thread *t, void *aux){
-
+static void
+update_recent_cpu(struct thread *t, void *aux)
+{
   t->recent_cpu=thread_calculate_recentcpu(t);
-
 }
 
 
 
-/* Comparator used by priority scheduler insert operation */
-static bool comparator (const struct list_elem *a, const struct list_elem *b, void *aux){
+/* comapres two threads by priority */
+bool 
+priority_less_comparator (const struct list_elem *a, const struct list_elem *b, void *aux)
+{
    struct thread* t1 = list_entry(a, struct thread, elem);
    struct thread* t2 = list_entry(b, struct thread, elem);
    return t1->priority < t2->priority;

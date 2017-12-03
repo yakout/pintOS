@@ -87,16 +87,24 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    struct list_elem allelem;           /* Hook the element to "all element" list {list of all elements in the system} */
-    /* Shared between thread.c and synch.c. */
-    struct list_elem elem;              /* Hook used to hook the element to only one of the lists {ready list, blocked list, sema list}*/
-
     int priority;                       /* Priority. */
-    int base_priority;                  /* Used for donation reversal. */
-    struct list lock_list;              /* List for the lock thread aquires. */
-    struct semaphore *lock_waiting_for; /* lock I am waiting to aquire. */
+    int base_priority;                  /* Real priority for thread. */
+    int effective_priority;             /* Donated priority for thread. */
+    
+    int sleep_time;
 
-    int sleep_time;                     /* # of ticks to sleep */
+    struct list_elem allelem;           /* List element for all threads list. */
+
+    /* Shared between thread.c and synch.c. */
+    struct list_elem elem;              /* List element. */
+
+
+    struct list_elem sleep_elem;        /* List element for sleep list. */
+
+    struct list lock_list;              /* List for the lock thread aquires. */
+
+    struct lock *lock_waiting_for;       /* lock I am waiting to aquire. */
+
 
 
 #ifdef USERPROG
@@ -112,7 +120,6 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
-extern struct semaphore *null_sema;
 
 void thread_init (void);
 void thread_start (void);
@@ -145,7 +152,11 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-void thread_sleep(int64_t ticks);
-void update_sleepers();
+
+void thread_sleep(int ticks);
+
+void thread_check_sleep(void);
+
+void thread_update_priority(struct thread *t);
 
 #endif /* threads/thread.h */

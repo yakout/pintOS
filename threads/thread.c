@@ -158,20 +158,20 @@ thread_tick (void)
   update_sleepers ();
 
   /* update running thread recent cpu every tick*/
-  t->recent_cpu+=1;
+  t->recent_cpu=t->recent_cpu+(1*math_power(2,14));
+
+  // calculate recent cpu every 1 second, and update load avg
+  if(timer_ticks()%TIMER_FREQ==0){
+    // update load avg
+    load_avg=calculate_load_avg();
+    // update recent cpu
+    thread_foreach (update_recent_cpu, NULL);
+    
+  }
 
   // calculate all threads' priority every 4 ticks
   if(timer_ticks()%TIME_SLICE==0){
     thread_foreach (update_priority, NULL);
-  }
-
-  // calculate recent cpu every 1 second, and update load avg
-  if(timer_ticks()%TIMER_FREQ==0){
-    // update recent cpu
-    thread_foreach (update_recent_cpu, NULL);
-    //update load avg
-    load_avg=calculate_load_avg();
-    //printf("\nload_avg (after update)= %d\n", thread_get_load_avg());
   }
 
 
@@ -421,7 +421,7 @@ thread_get_load_avg (void)
 int
 thread_get_recent_cpu (void) 
 {
-  return (100*thread_current()->recent_cpu)/math_power(2,BASE);
+  return 100*((thread_current()->recent_cpu)/math_power(2,BASE));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -507,7 +507,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
-  t->recent_cpu=thread_calculate_recent_cpu(t);
+  t->recent_cpu=0;
   t->priority = thread_calculate_priority(t);
   t->sleep_time=0;
   t->magic = THREAD_MAGIC;
@@ -638,15 +638,13 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 static int
 calculate_load_avg( void )
 {
-  int coeff_a=(59*math_power(2,BASE))/60;
-  int coeff_b=(1*math_power(2,BASE))/60;
-
-  int term_1=(59*load_avg)/60; //(coeff_a/math_power(2,BASE));
+  int term_1=(59*load_avg)/60;
 
   int ready_threads=list_size(&ready_list);
   if(thread_current()!=idle_thread){
     ready_threads+=1;
   }
+  int coeff_b=(1*math_power(2,BASE))/60;
   int term_2=(coeff_b)*ready_threads;
 
   return term_1+term_2;
@@ -657,14 +655,30 @@ calculate_load_avg( void )
 static int
 thread_calculate_recent_cpu(struct thread *t)
 {
-  /*int numerator=load_avg*2;
+  int numerator=load_avg*2;
   int denominator=numerator+(1*math_power(2,BASE));
+  int coeff_a=(numerator*math_power(2,14))/denominator;
 
-  int coeff_a=numerator/(denominator/math_power(2,BASE));*/
+  int term_1=coeff_a*(t->recent_cpu/math_power(2,BASE));
 
-  int numerator=2*(load_avg/math_power(2,7))*(t->recent_cpu/math_power(2,7));
+  /*int numerator=2*(load_avg)*(t->recent_cpu/math_power(2,14));
   int denominator=2*load_avg+(1*math_power(2,BASE));
-  int term_1=(numerator)/(denominator/math_power(2,14));
+  int term_1=(numerator)/(denominator/math_power(2,14));*/
+
+  //printf("\nload avg = %d\n", load_avg);
+  //printf("\nnumerator = %d\n", numerator);
+  //printf("\ndenominator = %d\n", denominator);
+  //printf("\nnice = %d\n", t->nice);
+  /*if(t!=idle_thread)
+  {
+    printf("\nthread name : %s\n", t->name);
+
+    printf("\ncoeff = %d\n", coeff_a);
+    printf("\nrecent cpu = %d\n", t->recent_cpu);
+    printf("\nterm = %d\n", term_1);
+    printf("\n-------------------------------------\n");
+  }*/
+  
 
   return term_1+(t->nice*math_power(2,BASE));
 }

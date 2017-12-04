@@ -123,6 +123,8 @@ test_mlfqs_recent_1 (void)
     }
   while (thread_get_recent_cpu () > 700);
 
+  //printf("\nPassed this point ------------------------------\n");
+
   start_time = timer_ticks ();
   for (;;) 
     {

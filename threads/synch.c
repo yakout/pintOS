@@ -73,6 +73,7 @@ sema_down (struct semaphore *sema)
       list_push_back (&sema->waiters, &thread_current ()->elem);
       thread_block ();
     }
+  //printf("\nEscaped Lock -----------------------\n");
   sema->value--;
   intr_set_level (old_level);
 }
@@ -240,6 +241,7 @@ lock_release (struct lock *lock)
 
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+  thread_yield();
 }
 
 /* Returns true if the current thread holds LOCK, false

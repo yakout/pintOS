@@ -661,14 +661,6 @@ thread_calculate_recent_cpu(struct thread *t)
 
   int term_1=coeff_a*(t->recent_cpu/math_power(2,BASE));
 
-  /*int numerator=2*(load_avg)*(t->recent_cpu/math_power(2,14));
-  int denominator=2*load_avg+(1*math_power(2,BASE));
-  int term_1=(numerator)/(denominator/math_power(2,14));*/
-
-  //printf("\nload avg = %d\n", load_avg);
-  //printf("\nnumerator = %d\n", numerator);
-  //printf("\ndenominator = %d\n", denominator);
-  //printf("\nnice = %d\n", t->nice);
   /*if(t!=idle_thread)
   {
     printf("\nthread name : %s\n", t->name);

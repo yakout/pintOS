@@ -40,6 +40,8 @@ static void donate(struct thread *t, struct lock *lock);
 
 static bool less_priority_lock(const struct list_elem *a,const struct list_elem *b,void *aux);
 
+static bool comparator (const struct list_elem *a, const struct list_elem *b, void *aux);
+
 
 
 extern struct list ready_list;
@@ -353,17 +355,19 @@ cond_init (struct condition *cond)
 void
 cond_wait (struct condition *cond, struct lock *lock) 
 {
-  struct semaphore_elem waiter;
-
   ASSERT (cond != NULL);
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
   
-  sema_init (&waiter.semaphore, 0);
-  list_push_back (&cond->waiters, &waiter.elem);
+  list_push_back (&cond->waiters, &thread_current()->elem);
   lock_release (lock);
-  sema_down (&waiter.semaphore);
+
+  enum intr_level old_level;
+  old_level = intr_disable ();
+  thread_block();
+  intr_set_level (old_level);
+  
   lock_acquire (lock);
 }
 
@@ -383,8 +387,10 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (lock_held_by_current_thread (lock));
 
   if (!list_empty (&cond->waiters)){ 
-    sema_up (&list_entry (list_pop_front (&cond->waiters),
-                          struct semaphore_elem, elem)->semaphore);
+    struct list_elem *e=list_max(&cond->waiters, comparator, NULL);
+    struct thread *t=list_entry(e, struct thread, elem);
+    list_remove(e);
+    thread_unblock(t);
   }
 }
 

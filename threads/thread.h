@@ -90,19 +90,14 @@ struct thread
     int priority;                       /* Priority. */
     int base_priority;                  /* Real priority for thread. */
     int effective_priority;             /* Donated priority for thread. */
-    
+
     int sleep_time;
 
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-
-
-    struct list_elem sleep_elem;        /* List element for sleep list. */
-
     struct list lock_list;              /* List for the lock thread aquires. */
-
     struct lock *lock_waiting_for;       /* lock I am waiting to aquire. */
 
 
@@ -153,10 +148,8 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 
-void thread_sleep(int ticks);
-
-void thread_check_sleep(void);
-
+void thread_sleep(int64_t ticks);
+void update_sleepers();
 void thread_update_priority(struct thread *t);
 
 #endif /* threads/thread.h */

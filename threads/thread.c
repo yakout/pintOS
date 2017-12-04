@@ -141,9 +141,7 @@ thread_tick (void)
   else
     kernel_ticks++;
 
-  /* Enforce preemption. */
-  /*if (++thread_ticks >= TIME_SLICE)
-    intr_yield_on_return ();*/
+  update_sleepers ();
 }
 
 /* Prints thread statistics. */
@@ -262,9 +260,15 @@ thread_unblock (struct thread *t)
   intr_set_level (old_level);
 
   if(t->priority > thread_current()->priority){
-    thread_yield();
+    if (intr_context()) 
+    {
+       intr_yield_on_return();
+    }
+    else
+    {
+      thread_yield();
+    }
   } 
-
 
 }
 
@@ -618,45 +622,50 @@ allocate_tid (void)
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 void
-thread_sleep(int ticks){
-  struct thread *t = thread_current();
-  t->sleep_time = ticks;
-  list_push_back(&sleep_list,&t->sleep_elem);
-  thread_block();
-}
-
-/* Loop over sleep threads and check if time has eclipsed or not. */
-void 
-thread_check_sleep(void){
-
-  struct list_elem *e;
-
-  ASSERT (intr_get_level () == INTR_OFF);
-  for (e = list_begin (&sleep_list); e != list_end (&sleep_list); e = list_next (e)){
-      struct thread *t = list_entry (e, struct thread, sleep_elem);
-      thread_wake_up(t);
-    }
-}
-
-void
-thread_update_priority(struct thread *t){
+thread_update_priority(struct thread *t)
+{
   if(t->base_priority > t->effective_priority){
     t->priority = t->base_priority;
   }else{
     t->priority = t->effective_priority;
   }
-
 }
 
-static void
-thread_wake_up(struct thread *t){
-  if(--t->sleep_time == 0){
-    // wake Up
-    list_remove(&t->sleep_elem);
-    thread_unblock(t);
-  }
+void 
+update_sleepers()
+{
+  // no need to disable interupts since we are at external iterupt (timer_interupt)
+
+  /* if there is no sleepers, return */
+  if (list_empty (&sleep_list)) return;
+
+  struct list_elem *e;
+  for (e = list_begin (&sleep_list); e != list_end (&sleep_list); e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, elem);
+      if (-- (t->sleep_time) == 0) {
+        e = list_prev (list_remove (e));
+        thread_unblock (t);
+      }
+    }
 }
 
+void
+thread_sleep(int64_t ticks) 
+{  
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  if (ticks <= 0)
+    return;
+
+  struct thread *t = thread_current ();
+  t->sleep_time = ticks;
+
+  list_push_back (&sleep_list, &t->elem);
+
+  /* this will change the current thread state to THREAD_BLOCKED and then call schedule () */
+  thread_block ();
+}
 
 
 /* Comparator used by priority scheduler insert operation */

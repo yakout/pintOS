@@ -100,7 +100,10 @@ struct thread
     struct list lock_list;              /* List for the lock thread aquires. */
     struct lock *lock_waiting_for;       /* lock I am waiting to aquire. */
 
-
+    
+    /* BSD SCHEDULER */
+    int recent_cpu;                     /* Thread recent cpu time*/
+    int nice;                           /* Thread nice value*/
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -115,6 +118,7 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
+static int load_avg;
 
 void thread_init (void);
 void thread_start (void);

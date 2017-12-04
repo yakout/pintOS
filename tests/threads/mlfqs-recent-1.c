@@ -112,7 +112,7 @@ test_mlfqs_recent_1 (void)
   int64_t start_time;
   int last_elapsed = 0;
   
-  ASSERT (thread_mlfqs);
+  //ASSERT (thread_mlfqs);
 
   do 
     {
@@ -122,6 +122,8 @@ test_mlfqs_recent_1 (void)
                    + 10 * TIMER_FREQ);
     }
   while (thread_get_recent_cpu () > 700);
+
+  //printf("\nPassed this point ------------------------------\n");
 
   start_time = timer_ticks ();
   for (;;) 

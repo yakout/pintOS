@@ -41,7 +41,7 @@ static bool less_priority(const struct list_elem *a,const struct list_elem *b,vo
 static void donate(struct thread *t, struct lock *lock);
 static bool less_priority_lock(const struct list_elem *a,const struct list_elem *b,void *aux);
 static bool comparator (const struct list_elem *a, const struct list_elem *b, void *aux);
-
+static void revert_priority();
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -130,6 +130,8 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
   old_level = intr_disable ();
 
+  //printf("\nsema up called --------------------------\n");
+
 // <<<<<<< HEAD
 //   sema->value++;
 //   if (!list_empty (&sema->waiters)){
@@ -148,6 +150,8 @@ sema_up (struct semaphore *sema)
       struct thread *wakeup = list_entry(e, struct thread, elem);
       list_remove(e);
       thread_unblock (wakeup);
+      //printf("\nmlfqs : %d\n", thread_mlfqs);
+      //printf("\nreturn from unblock --------------------------\n");
     }
 
   intr_set_level (old_level);
@@ -282,14 +286,31 @@ lock_release (struct lock *lock)
 
   lock->holder = NULL;
 
-  /* remove current lock from current_thread list of locks. */
-  if (!list_empty(&lock->semaphore.waiters))
-    list_remove(&lock->elem);
+
+  if (!thread_mlfqs) {
+
+    /* remove current lock from current_thread list of locks. */
+    if (!list_empty(&lock->semaphore.waiters)){
+      list_remove(&lock->elem);
+    }
+
+    revert_priority();
+
+    sema_up(&lock->semaphore);
+    
+  }else{
+
+    sema_up(&lock->semaphore);
+    thread_yield ();
+  }
+
+  
+
 
   
   /* loop over list and take the highest make its priority = donated. */
   // there is a function called list_max that take the list and the function.
-  if (!list_empty (&thread_current ()->lock_list))
+  /*if (!list_empty (&thread_current ()->lock_list))
   {   
    struct list_elem *max = list_max (&thread_current ()->lock_list, less_priority_lock, NULL);
    struct lock *lock_highest_priority = list_entry (max, struct lock, elem);
@@ -303,13 +324,19 @@ lock_release (struct lock *lock)
     thread_current ()->effective_priority = PRI_MIN;
   }
 
-  thread_update_priority (thread_current ());
-  sema_up (&lock->semaphore);
+  thread_update_priority (thread_current ());*/
 
-  if (thread_mlfqs) 
+  /*if (thread_mlfqs) 
   {
+    // preemptive yield
     thread_yield ();
   }
+
+  
+
+  //printf("\nReached this block ---------------\n");
+  thread_yield ();*/
+
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -459,4 +486,26 @@ less_priority_lock(const struct list_elem *a,const struct list_elem *b,void *aux
   const struct list_elem *e1 = list_front (&l1->semaphore.waiters);
   const struct list_elem *e2 = list_front (&l2->semaphore.waiters);
   return less_priority (e1,e2,NULL);
+}
+
+
+static void 
+revert_priority(){
+    /* loop over list and take the highest make its priority = donated. */
+  // there is a function called list_max that take the list and the function.
+  if (!list_empty (&thread_current ()->lock_list))
+  {   
+   struct list_elem *max = list_max (&thread_current ()->lock_list, less_priority_lock, NULL);
+   struct lock *lock_highest_priority = list_entry (max, struct lock, elem);
+   struct list_elem *e = list_max (&lock_highest_priority->semaphore.waiters, less_priority, NULL);
+   struct thread *t = list_entry (e, struct thread, elem);
+
+   thread_current ()->effective_priority = t->priority;
+  }
+  else
+  {
+    thread_current ()->effective_priority = PRI_MIN;
+  }
+
+  thread_update_priority (thread_current ());
 }

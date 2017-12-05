@@ -286,7 +286,6 @@ thread_block (void)
 void
 thread_unblock (struct thread *t) 
 {
-
   enum intr_level old_level;
   ASSERT (is_thread (t));
   old_level = intr_disable ();
@@ -308,6 +307,8 @@ thread_unblock (struct thread *t)
       thread_yield ();
     }
   } 
+
+  //printf("\nunblock called --------------------------\n");
 
 }
 
@@ -375,6 +376,8 @@ thread_yield (void)
   enum intr_level old_level;
   ASSERT (!intr_context ());
   old_level = intr_disable ();
+
+  //printf("\nReached this block ---------------\n");
 
 // <<<<<<< HEAD
 //   if (cur != idle_thread) 

@@ -30,26 +30,81 @@ Muhammed Khamis <muhammedessam10@gmail.com>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Added members in thread struct in thread.h file:
+
+  int sleep_time;;
+  - Number of ticks the thread will sleep.
+
+Added variables in file timer.c:
+
+  static struct list sleep_list;
+  - List to keep track of all sleeping threads.
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
 
+In timer_sleep(ticks):
+
+  1. disable interupts.
+  2. call thread_sleep(ticks).
+  3. enables interupts.
+
+    thread_sleep (ticks):
+      1. The sleep_time of the thread is set.
+      2. The thread is added to the 'sleep_list'.
+      3. The thread is blocked.
+
+In timer_interrupt():
+
+  1. Loop over 'sleep_list'.
+  2. decrease the 'sleep_time' for all threads by 1 tick.
+  3. Wake up and remove from 'sleep_list' any thread whose
+     sleep_time has become zero by calling 'thread_unblock()'.
+
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
+
+'sleep_list' is kept sorted by wakeup time so the timer interrupt
+handler doesn't have to look at all sleeping threads.
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
+There are only two data modified in 'timer_sleep()':
+  1. Attributes of struct thread.
+  2. 'sleep_list' list in "thread.c".
+
+For #1, No potential race condition here.
+For #2 interrupts are disabled which guarantees no other thread can be
+modifying the list at the same time.
+
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
+
+The only thing shared between 'timer_sleep()' and the timer interrupt handler is
+'sleep_list', so we disable interrupts before modifying
+it from 'timer_sleep()'.
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+One way or another, we had to keep track of threads that are sleeping and
+the remaining 'sleep_time', There were 2 options:
+  1. Create a new struct for each sleeping thread containing its 'sleep_time' 
+    and keep a list of these structs.
+  2. Directly add 'sleep_time' to struct thread.
+
+ The second option seemed better because why create a separate
+ struct associated with a thread that already exists when we can just
+ put all the information in one place?, after all it is related to each
+ thread so why not put it in struct thread.
+
 
 			 PRIORITY SCHEDULING
 			 ===================

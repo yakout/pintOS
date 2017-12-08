@@ -239,6 +239,7 @@ lock_acquire (struct lock *lock)
 
   if (!success)
   {
+    // to ensure that i pushed the lock once.
     if (list_empty(&lock->semaphore.waiters))
     {
         list_push_back (&(lock->holder->lock_list), &lock->elem);

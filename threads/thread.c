@@ -413,8 +413,16 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->base_priority = new_priority;
-  thread_update_priority(thread_current());
+  
+  enum intr_level old_level;
+  old_level = intr_disable ();
+  
+    thread_current ()->base_priority = new_priority;
+  
+    thread_update_priority(thread_current());
+  
+  intr_set_level (old_level);
+
   if(!list_empty(&ready_list)){
     struct thread* t = list_entry(list_front(&ready_list),struct thread,elem);
     if(t->priority > thread_current()->priority){

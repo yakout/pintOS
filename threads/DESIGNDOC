@@ -241,14 +241,34 @@ I choose this design because I had to add the least amount of variables possible
 and without using malloc to allocate memory, also we used the linked list implementation,
 to make the overall implementation more easier. 
 
-			  ADVANCED SCHEDULER
-			  ==================
+
+        ADVANCED SCHEDULER
+        ==================
 
 ---- DATA STRUCTURES ----
 
 >> C1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+
+Added members in "thread struct" in "thread.h" file:
+
+  int recent_cpu:
+  - 17/14 float represented as integer.
+  - used to count how many times a thread has held the cpu over the last minute
+  - used to calculate thread priority
+
+  int nice:
+  - determines how "nice" the thread should be to other threads
+  - value range = {-20, -19, ...,0, ..., 19, 20}
+  - implies who much a thread is willing to give the cpu if others need it
+
+Added global variables in the "thread.h" file:
+
+   static int load_avg:
+  - 17/14 float represented as integer.
+  - represents how many threads were competing for cpu time over the past minute
+
 
 ---- ALGORITHMS ----
 
@@ -260,23 +280,45 @@ to make the overall implementation more easier.
 timer  recent_cpu    priority   thread
 ticks   A   B   C   A   B   C   to run
 -----  --  --  --  --  --  --   ------
- 0
- 4
- 8
-12
-16
-20
-24
-28
-32
-36
+ 0     0   1   2   60  57  55   A
+ 4     4   1   2   59  57  55   A
+ 8     8   1   2   58  57  55   A
+12     12  1   2   57  57  55   B
+16     12  5   2   57  56  55   A
+20     16  5   2   56  56  55   B
+24     16  9   2   56  55  55   A
+28     20  9   2   55  55  55   C
+32     20  9   6   55  55  54   B
+36     20  13  6   55  54  54   A
 
 >> C3: Did any ambiguities in the scheduler specification make values
 >> in the table uncertain?  If so, what rule did you use to resolve
 >> them?  Does this match the behavior of your scheduler?
 
+1. multiple threads having the same priority when schedule() called
+  - when thead yields the cpu, use list_push_back() to add this
+    thread at the end of the corresponding queue
+  - when selecting the next thread to run, select the first thread
+    from the front of the queue
+
+2. calculate thread priority math_round
+  - calculating a priority integer from a float recent_cpu
+  - the problem is to round up or down
+  - round down is used
+
+implemented BSD scheduler does exactly the same as described in above
+
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
+
+cost of scheduling = load_avg, or recent_cpu, or priority, or all
+which happens inside an interrupt context
+we only update priority of the running thread when schedule() is called
+leaving the other two parameters and threads un-updated
+saving time spent inside an interrupt context
+these remaning parameters are updated every 100 ticks which is convenient
+as we want to update these parameters but at the same time not stay inside
+interrupt context "timer_interrupt()" for long time 
 
 ---- RATIONALE ----
 
@@ -285,12 +327,34 @@ ticks   A   B   C   A   B   C   to run
 >> time to work on this part of the project, how might you choose to
 >> refine or improve your design?
 
+BSD scheduler code was quite simple. all code control took place in the
+thread_tick() function with the addition of thread_yield() at lock release.
+advantages:
+  - code simplicity
+  - easy to debug
+disadvantages:
+  - deciding to remove fixed_point.h abstract layer after implementing it
+
+having extra time, i would've re-added the fixed_point.h arithmetic header
+to make the code more modular after having got the equations right.
+
 >> C6: The assignment explains arithmetic for fixed-point math in
 >> detail, but it leaves it open to you to implement it.  Why did you
 >> decide to implement it the way you did?  If you created an
 >> abstraction layer for fixed-point math, that is, an abstract data
 >> type and/or a set of functions or macros to manipulate fixed-point
 >> numbers, why did you do so?  If not, why not?
+
+we decided not to add an abstract layer for fixed_point arithmetic.
+we tried at first and in fact created fixed_point.c and fixed_point.h
+the fixed_point.h looked more modular
+but we had to implement too many equations.
+the formulae for calcualting load_avg, recent_cpu, and priority got more
+complicated and confusing
+and debugging the output and equation correctness was not easy at all
+on the other hand we implementing fixed_point arithmetic with normal integers
+made debugging alot easier. the codes for updating priority variables
+became very simple (3-4 lines of code for updating each).
 
 			   SURVEY QUESTIONS
 			   ================

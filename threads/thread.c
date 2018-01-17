@@ -204,6 +204,14 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  #ifdef USERPROG
+  /* Add it to the current thread child list. */
+    list_init(&(t->child_list));
+    list_init(&(t->open_file_table));
+    list_push_back(&(thread_current()->child_list) , &(t->childelem));
+    t->current_fd = 1;
+  #endif
+
   intr_set_level (old_level);
 
   /* Add to run queue. */

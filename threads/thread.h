@@ -5,6 +5,16 @@
 #include <list.h>
 #include <stdint.h>
 
+
+struct file_entry
+{
+  struct list_elem hock;
+  int fd;
+  struct file* file;
+};
+
+
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -96,6 +106,10 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    struct list_elem childelem;         /* List element for my Parent child list. */
+    struct list child_list;             /* List for my children. */
+    struct list open_file_table;        /* List for files opened by process */
+    int current_fd;
 #endif
 
     /* Owned by thread.c. */

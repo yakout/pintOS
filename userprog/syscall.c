@@ -26,6 +26,7 @@ static void *to_kernel_addr (void *uaddr);
 static struct file *get_file_by_fd (int fd);
 
 void exit (int status);
+void halt(void);
 bool create (const char *file, unsigned initial_size);
 int filesize (int fd);
 void seek (int fd, unsigned position);
@@ -34,29 +35,27 @@ void seek (int fd, unsigned position);
 struct lock fs_lock;
 struct lock *exec_lock;
 
-
+extern struct list waiters_list;
+extern struct waiter;
 
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(exec_lock);
+  lock_init(fs_lock);
   index = 2;
+  list_init(&waiters_list);
 }
 
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
+ 
+ /* identify system call */
+int *p=f->esp;
 
- // int *p=f->esp;
- // if(*p == SYS_WRITE){
- // 	printf("blahfhdhdhdhfh");
- // 	printf("%s\n", *(p+6));
- //  }
-
- int p = get_parameter(f,PARM_ZERO);
-
- switch(p) {
+ switch(*p) {
  	case SYS_EXEC:
  		exec_handler(f);
  		break;
@@ -69,22 +68,69 @@ syscall_handler (struct intr_frame *f UNUSED)
  	case SYS_TELL:
  		tell_handler(f);
  		break;
+ 	case SYS_EXIT:
+ 		/* terminates the current user program */
+ 		printf("\nexit status = %d\n", *(p+1) );
+ 		/* update the status of running */
+ 		int status = *(p+1);
+ 		exit(status);
+ 		break;
+ 	case SYS_WAIT:
+ 		/* waits for a child process pid and retrieves the child's exit status */
+ 		/* obtain p_id of process to wait for */
+ 		printf("\nchild ID = %d\n", *(p+1) );
+ 		tid_t child_tid = *(p+1);
+ 		int child_status = process_wait(child_tid);
+ 		f->eax=child_status;
+ 		break;
+ 	case SYS_CLOSE:
+ 		// TODO
+ 		break;
+ 	case SYS_HALT:
+ 		halt();
+ 		break;
+ 	case SYS_WRITE:
+ 		// retrieve sys call type (console or disk)
+ 		int type = *(p+1);
+ 		if(type==1)
+ 		{
+ 			/* write to console */
+ 			printf("%s\n", *(p+2) );
+ 		}
+ 		else
+ 		{
+ 			/* write to disk */
+ 		}
+ 		break;
+ 	case SYS_OPEN:
+ 		const char* file_name = (char*) *(p+1);
+		struct file* open_file = filesys_open (file_name);
+		struct file_entry* entry = malloc (sizeof (*entry));
+		entry->fd = allocate_fd();
+		entry->file = open_file;
+		list_push_back (&thread_current ()->open_file_table, &entry->hock);
+		f->eax = entry->fd;
+ 		break;
+ 	default:
+ 		exit(-1);
  }
 
-  thread_exit ();
+}
+
+void
+halt( void ) 
+{
+	/* terminates Pintos by calling shutdown_power_off() */
+ 	shutdown_power_off ();
 }
 
 
-/* Terminates the current user program, returning status to the kernel */
 void
 exit (int status)
 {
-  struct thread *cur = thread_current ();
-  // cur->exit_status = status;
-  printf ("%s: exit(%d)\n", cur->name, status);
-  thread_exit ();
+	update_process_waiters_list (status);
+ 	thread_exit ();
 }
-
 
 /* Creates a new file called file initially initial_size bytes in size.
  Returns true if successful, false otherwise.  */
@@ -227,14 +273,30 @@ remove_handler(struct intr_frame *f)
 static void
 read_handler(struct intr_frame *f)
 {
-	const char* file_name = (char*) get_parameter (f,PARM_ONE);
+	const char* file_name = (char*) get_parameter (f, PARM_ONE);
+}
 
+void
+update_process_waiters_list(int status)
+{
+  tid_t current_tid = thread_current()->tid;
+
+  struct list_elem *e;
+  for (e = list_begin (&waiters_list); e != list_end (&waiters_list);
+       e = list_next (e))
+    {
+      struct waiter *entry = list_entry (e, struct waiter, entry_hook);
+      if (entry->child_tid == current_tid)
+      {
+        entry->child_exit_status=status;
+      }
+    }
 }
 
 static int
-allocate_fd(){
-	thread_current()->current_fd++;
-  	return thread_current()->current_fd ;
+allocate_fd()
+{
+	return thread_current ()->current_fd++;
 }
 
 static void

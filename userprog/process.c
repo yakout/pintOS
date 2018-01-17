@@ -91,8 +91,24 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  while(1);
-  return -1;
+
+  /* create new wait entry */
+  struct waiter entry;
+  entry.parent_tid = thread_current()->tid;
+  entry.child_tid = child_tid;
+  entry.child_exit_status=10;
+  list_push_back (&waiters_list, &entry.entry_hook);
+
+  /* wait until child exits */
+  while(entry.child_exit_status == 10)
+    {
+      thread_yield();
+    }
+
+  /* return child status */
+  list_remove(&entry.entry_hook);
+  return entry.child_exit_status;
+
 }
 
 /* Free the current process's resources. */
@@ -525,20 +541,23 @@ install_page (void *upage, void *kpage, bool writable)
 }
 
 static char** 
-get_argv(char* command, int* argc){
+get_argv(char* command, int* argc)
+{
   char* save_ptr;
   char* c_copy = calloc(strlen(command)+1,sizeof(*c_copy));
   strlcpy(c_copy,command,strlen(command)+1);
   char* arg = strtok_r(c_copy," ",&save_ptr);
   *argc = 0;
-  while(arg!=NULL){
+  while(arg!=NULL)
+  {
     (*argc)++;
     arg = strtok_r(NULL," ",&save_ptr);
   }
   char** argv = calloc(*argc,sizeof(*argv));
   arg = strtok_r(command," ",&save_ptr);
   int i =0;
-  while(arg!=NULL){
+  while(arg!=NULL)
+  {
     argv[i] = calloc(strlen(arg)+1,sizeof(char));
     strlcpy(argv[i],arg,strlen(arg)+1);
     arg = strtok_r(NULL," ",&save_ptr);

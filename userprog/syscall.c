@@ -6,6 +6,7 @@
 #include "threads/vaddr.h"
 #include "userprog/process.h"
 #include "threads/synch.h"
+#include "filesys/filesys.h"
 
 struct lock *exec_lock;
 
@@ -18,6 +19,7 @@ static int get_user (const uint8_t *uaddr);
 static bool put_user (uint8_t *udst, uint8_t byte);
 static uint32_t get_parameter(struct intr_frame *f , int number);
 static bool valid_string_pointer(char* str);
+static bool valid_string(const char* str);
 
 
 void
@@ -25,6 +27,7 @@ syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(exec_lock);
+  index = 2;
 }
 
 static void
@@ -60,14 +63,11 @@ exec_handler(struct intr_frame *f){
 	const char* command_line = (char*)get_parameter(f,PARM_ONE);
 	
 	// check the pointer to be in user memory
-	if(command_line >= PHYS_BASE){
+	if(!valid_string(command_line)){
 		f->eax = -1;
 		return;
 	}
-	if(!valid_string_pointer(command_line)){
-		f->eax = -1;
-		return;
-	}
+
  	// no interrupts until parent finishes
 	lock_acquire (exec_lock);					
 	
@@ -80,23 +80,67 @@ exec_handler(struct intr_frame *f){
 	// return id
 	f->eax = pid;
 }
+static void
+open_handler(struct intr_frame *f){
+	
+	const char* file_name = (char*) get_parameter(f,PARM_ONE);
+	if(!valid_string(file_name)){
+		f->eax = -1;
+		return;	
+	}
+	struct file* open_file = filesys_open (file_name);
+	if(open_file == NULL){
+		f->eax = -1;
+		return;
+	}
+	struct file_entry* entry = malloc(sizeof(*entry));
+	entry->fd = allocate_fd();
+	entry->file = open_file;
+	list_push_back(&thread_current()->open_file_table,&entry->hock);
+	f->eax = entry->fd;
+}
 
 static void
 remove_handler(struct intr_frame *f){
 	// get file name
-	// get the file
+	const char* file_name = (char*)get_parameter(f,PARM_ONE);
+	
+	// check for validity.
+	if(!valid_string(file_name)){
+		f->eax = false;
+		return;
+	}
 	// remove it
-	// return true if yes else return no
+	f->eax =  filesys_remove(file_name);
 }
 
 static void
 read_handler(struct intr_frame *f){
+	const char* file_name = (char*) get_parameter(f,PARM_ONE);
 
+}
+
+static int
+allocate_fd(){
+	thread_current()->current_fd++;
+  	return thread_current()->current_fd ;
 }
 
 static void
 tell_handler(struct intr_frame *f){
+	int fd = (int) get_parameter(f,PARM_ONE);
+}
 
+static bool
+valid_string(const char* str){
+
+	if(is_kernel_vaddr(str)){
+		return false;
+	}
+	if(!valid_string_pointer(str)){
+		return false;
+	}
+	return true;
 }
 
 static uint32_t

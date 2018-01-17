@@ -207,6 +207,9 @@ thread_create (const char *name, int priority,
   #ifdef USERPROG
   /* Add it to the current thread child list. */
     list_push_back(&(thread_current()->child_list) , &(t->childelem));
+    list_init(&(t->child_list));
+    list_init(&(t->open_file_table));
+    t->current_fd = 1;
   #endif
 
   intr_set_level (old_level);
@@ -474,7 +477,6 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  list_init(&(t->child_list));
   list_push_back (&all_list, &t->allelem);
 }
 

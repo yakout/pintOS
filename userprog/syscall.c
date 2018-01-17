@@ -3,6 +3,7 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "../lib/debug.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -15,6 +16,13 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  printf ("system call!\n");
+
+
+ int *p=f->esp;
+ if(*p == SYS_WRITE){
+ 	printf("%s\n", *(p+6));
+  }
+
+
   thread_exit ();
 }

@@ -20,7 +20,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-
+static char** get_argv(char* command, int* argc);
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -38,8 +38,10 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (file_name, PRI_DEFAULT+5, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -63,6 +65,7 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
+
   if (!success) 
     thread_exit ();
 
@@ -88,6 +91,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  while(1);
   return -1;
 }
 
@@ -195,7 +199,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char** argv , int argc);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -221,8 +225,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  //split file_name
+  char** argv;
+  int argc;
+  argv = get_argv(file_name,&argc);
+
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (argv[0]);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -302,17 +311,25 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp,argv,argc))
     goto done;
+
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
 
+  // free memory
+  for(i=0;i<argc;i++){
+    free(argv[i]);
+  }
+  free(argv);
+
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
+
   return success;
 }
 
@@ -427,7 +444,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp,char** argv , int argc) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -441,6 +458,49 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
+  // push to stack
+  int i;
+
+  int* u_add = calloc(argc,sizeof(*u_add));
+
+  // push values;
+  for(i=argc-1;i>=0;i--){
+    int len = strlen(argv[i])+1;
+    *esp-=len;
+    memcpy(*esp,argv[i],len);
+    u_add[i] = (int)*esp;
+  }
+
+  // make Word-aligned
+  while((int)*esp%4!=0){
+    *esp-=sizeof(uint8_t);
+    memset(*esp,0,sizeof(uint8_t));
+  }
+
+  // push NULL 
+  *esp-=sizeof(int);
+  memset(*esp, 0, sizeof(int));
+
+  // push address of arguments;
+  for(i=argc-1;i>=0;i--){
+    int len = sizeof(u_add[i]);
+    *esp-=len;
+    memcpy(*esp,&u_add[i],len);
+  }
+
+  // push address of array of arguments
+  int dummy = *esp;
+  *esp-=sizeof(dummy);
+  memcpy(*esp,&dummy,sizeof(dummy));
+
+  // push argc;
+  *esp-= sizeof(argc);
+  memcpy(*esp,&argc,sizeof(argc));
+
+  // push return address;
+  *esp -= sizeof(void(*)());
+  memset(*esp, 0, sizeof(void(*)()));
+
   return success;
 }
 
@@ -462,4 +522,28 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+static char** 
+get_argv(char* command, int* argc){
+  char* save_ptr;
+  char* c_copy = calloc(strlen(command)+1,sizeof(*c_copy));
+  strlcpy(c_copy,command,strlen(command)+1);
+  char* arg = strtok_r(c_copy," ",&save_ptr);
+  *argc = 0;
+  while(arg!=NULL){
+    (*argc)++;
+    arg = strtok_r(NULL," ",&save_ptr);
+  }
+  char** argv = calloc(*argc,sizeof(*argv));
+  arg = strtok_r(command," ",&save_ptr);
+  int i =0;
+  while(arg!=NULL){
+    argv[i] = calloc(strlen(arg)+1,sizeof(char));
+    strlcpy(argv[i],arg,strlen(arg)+1);
+    arg = strtok_r(NULL," ",&save_ptr);
+    i++;
+  }
+  free(c_copy);
+  return argv;
 }

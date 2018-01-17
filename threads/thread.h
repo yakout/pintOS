@@ -96,11 +96,24 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    struct list open_file_table;        /* List for files opened by process */
+    int current_fd;
 #endif
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+
+
+struct file_entry
+{
+
+  struct list_elem hock;
+  int fd;
+  struct file* file;
+
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

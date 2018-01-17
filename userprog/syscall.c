@@ -82,7 +82,7 @@ exec_handler(struct intr_frame *f){
 }
 static void
 open_handler(struct intr_frame *f){
-	
+
 	const char* file_name = (char*) get_parameter(f,PARM_ONE);
 	if(!valid_string(file_name)){
 		f->eax = -1;
@@ -129,6 +129,12 @@ allocate_fd(){
 static void
 tell_handler(struct intr_frame *f){
 	int fd = (int) get_parameter(f,PARM_ONE);
+	struct file* current_file = get_file(fd);
+	if(current_file == NULL){
+		f->eax = -1;
+		return;
+	}
+	f->eax = file_tell(current_file);
 }
 
 static bool
@@ -181,4 +187,21 @@ valid_string_pointer(char* str){
 		str++;
 	}
 	return *str=='\0';
+}
+
+static struct file *
+get_file(int fd){
+	
+  struct list_elem *e;
+
+  for (e = list_begin (&thread_current()->open_file_table);
+  	   e != list_end (&thread_current()->open_file_table);
+       e = list_next (e))
+    {
+      struct file_entry *entry = list_entry (e, struct file_entry, hock);
+      if(entry->fd==fd){
+      	return entry->file;
+      }
+    }
+  return NULL;
 }

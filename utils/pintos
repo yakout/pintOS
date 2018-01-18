@@ -532,7 +532,7 @@ sub get_scratch_file {
 sub run_vm {
     if ($sim eq 'bochs') {
 	run_bochs ();
-    } elsif ($sim eq 'qemu-system-i386') {
+    } elsif ($sim eq 'qemu') {
 	run_qemu ();
     } elsif ($sim eq 'player') {
 	run_player ();
@@ -924,15 +924,15 @@ sub exec_setitimer {
     exit (1);
 }
 
-# sub SIGVTALRM {
-#     use Config;
-#     my $i = 0;
-#     foreach my $name (split(' ', $Config{sig_name})) {
-# 	return $i if $name eq 'VTALRM';
-# 	$i++;
-#     }
-#     return 0;
-# }
+sub SIGVTALRM {
+    use Config;
+    my $i = 0;
+    foreach my $name (split(' ', $Config{sig_name})) {
+	return $i if $name eq 'VTALRM';
+	$i++;
+    }
+    return 0;
+}
 
 # find_in_path ($program)
 #

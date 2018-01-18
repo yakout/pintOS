@@ -6,15 +6,6 @@
 #include <stdint.h>
 
 
-struct file_entry
-{
-  struct list_elem hock;
-  int fd;
-  struct file* file;
-};
-
-
-
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -121,7 +112,7 @@ struct thread
 struct file_entry
 {
 
-  struct list_elem hock;
+  struct list_elem hook;
   int fd;
   struct file* file;
 

@@ -97,8 +97,8 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct list_elem childelem;         /* List element for my Parent child list. */
-    struct list child_list;             /* List for my children. */
+    //struct list_elem childelem;         /* List element for my Parent child list. */
+    //struct list child_list;             /* List for my children. */
     struct list open_file_table;        /* List for files opened by process */
     int current_fd;
 #endif

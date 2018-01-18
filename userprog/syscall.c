@@ -48,7 +48,7 @@ static void *to_kernel_addr (void *uaddr);
 struct lock fs_lock;
 
 extern struct list waiters_list;
-extern struct waiter;
+//extern struct waiter;
 
 void
 syscall_init (void) 
@@ -113,7 +113,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 
 
-void
+static void
 halt_handler( void ) 
 {
 	/* terminates Pintos by calling shutdown_power_off() */
@@ -121,10 +121,11 @@ halt_handler( void )
 }
 
 
-void
+static void
 exit_handler (int status)
 {
 	update_process_waiters_list (status);
+	printf ("%s: exit(%d)\n", thread_current()->name, status);
  	thread_exit ();
 }
 
@@ -261,6 +262,8 @@ read_handler(int fd, void *buffer, unsigned size)
 static int
 write_handler(int fd, void *buffer, unsigned size)
 {
+	//printf("\nfd = %d\n", fd);
+
 	/* read from console */
 	if (fd == 1) 
 	{

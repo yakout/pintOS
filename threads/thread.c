@@ -184,12 +184,6 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
-  #ifdef USERPROG
-    list_init(&(t->open_file_table));
-    t->current_fd = 1;
-  #endif
-
-
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
      member cannot be observed. */
@@ -212,9 +206,9 @@ thread_create (const char *name, int priority,
 
   #ifdef USERPROG
   /* Add it to the current thread child list. */
-    list_init(&(t->child_list));
+    //list_init(&(t->child_list));
     list_init(&(t->open_file_table));
-    list_push_back(&(thread_current()->child_list) , &(t->childelem));
+    //list_push_back(&(thread_current()->child_list) , &(t->childelem));
     t->current_fd = 1;
   #endif
 

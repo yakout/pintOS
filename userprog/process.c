@@ -246,6 +246,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   char** argv;
   int argc;
   argv = get_argv(file_name,&argc);
+  memcpy(thread_current()->name, argv[0], strlen(argv[0])+1);
 
   /* Open executable file. */
   file = filesys_open (argv[0]);

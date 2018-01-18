@@ -9,7 +9,7 @@ enum
     PARM_THREE,                   
   };
 
-
+#define PARM(EPS,NUMBER) (*((EPS)+(NUMBER)))
 
 void syscall_init (void);
 

@@ -11,9 +11,9 @@
 
 
 static void syscall_handler (struct intr_frame *);
-static void exec_handler(struct intr_frame *f);
-static void remove_handler(struct intr_frame *f);
-static void read_handler(struct intr_frame *f);
+static tid_t exec_handler(struct intr_frame *f);
+static bool remove_handler(struct intr_frame *f);
+static int read_handler(struct intr_frame *f);
 static void tell_handler(struct intr_frame *f);
 static int get_user (const uint8_t *uaddr);
 static bool put_user (uint8_t *udst, uint8_t byte);
@@ -33,7 +33,7 @@ void seek (int fd, unsigned position);
 
 
 struct lock fs_lock;
-struct lock *exec_lock;
+struct lock fd_lock;
 
 extern struct list waiters_list;
 extern struct waiter;
@@ -42,9 +42,8 @@ void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  lock_init(exec_lock);
-  lock_init(fs_lock);
-  index = 2;
+  lock_init(&fs_lock);
+  lock_init(&fd_lock);
   list_init(&waiters_list);
 }
 
@@ -57,16 +56,16 @@ int *p=f->esp;
 
  switch(*p) {
  	case SYS_EXEC:
- 		exec_handler(f);
+ 		f->eax = exec_handler(PARM(p,PARM_ONE));
  		break;
  	case SYS_REMOVE:
- 		remove_handler(f);
+ 		f->eax = remove_handler(PARM(p,PARM_ONE));
  		break;
  	case SYS_READ:
- 		read_handler(f);
+ 		f->eax = read_handler(PARM(p,PARM_ONE),PARM(p,PARM_TWO),PARM(p,PARM_THREE));
  		break;
  	case SYS_TELL:
- 		tell_handler(f);
+ 		tell_handler(PARM(p,PARM_ONE));
  		break;
  	case SYS_EXIT:
  		/* terminates the current user program */
@@ -103,13 +102,7 @@ int *p=f->esp;
  		}
  		break;
  	case SYS_OPEN:
- 		const char* file_name = (char*) *(p+1);
-		struct file* open_file = filesys_open (file_name);
-		struct file_entry* entry = malloc (sizeof (*entry));
-		entry->fd = allocate_fd();
-		entry->file = open_file;
-		list_push_back (&thread_current ()->open_file_table, &entry->hock);
-		f->eax = entry->fd;
+ 		f->eax = open_handler(PARM(p,PARM_ONE));
  		break;
  	default:
  		exit(-1);
@@ -167,7 +160,7 @@ filesize (int fd)
 
 /* Changes the next byte to be read or written in open file fd to position,
  expressed in bytes from the beginning of the file. */
-void 
+static void 
 seek (int fd, unsigned position)
 {
   if (position < 0)
@@ -186,6 +179,7 @@ seek (int fd, unsigned position)
 
 
 /* This function maps uaddr to kaddr. */
+static void
 to_kernel_addr(void *uaddr)
 {
 	struct thread *curr = thread_current ();
@@ -203,11 +197,9 @@ to_kernel_addr(void *uaddr)
 }
 
 
-static void
-exec_handler(struct intr_frame *f)
+static tid_t
+exec_handler(char* command_line)
 {
-	// get parameter
-	const char* command_line = (char*) get_parameter (f, PARM_ONE);
 	
 	// check the pointer to be in user memory
 	if(!valid_string(command_line)){
@@ -216,67 +208,93 @@ exec_handler(struct intr_frame *f)
 	}
 
  	// no interrupts until parent finishes
-	lock_acquire (exec_lock);					
+	lock_acquire (&fs_lock);					
 	
 	// apply spwaning 
 	tid_t pid = process_execute (command_line);
 	
 	// you can continue on
-	lock_release(exec_lock);
+	lock_release(&fs_lock);
 	
 	// return id
-	f->eax = pid;
+	return pid;
 }
 
-static void
-open_handler(struct intr_frame *f)
+static int
+open_handler(const char* file_name)
 {
-	const char* file_name = (char*) get_parameter (f, PARM_ONE);
 
 	if (!valid_string (file_name))
 	{
-		f->eax = -1;
-		return;	
+		return -1 ;	
 	}
+
+	lock_acquire(&fs_lock);
 
 	struct file* open_file = filesys_open (file_name);
 
+	lock_release(&fs_lock);
+
 	if(open_file == NULL)
 	{
-		f->eax = -1;
-		return;
+		return -1 ;
 	}
 
+	// note that you should free the file_entry struct when close.
 	struct file_entry* entry = malloc (sizeof (*entry));
 	entry->fd = allocate_fd ();
 	entry->file = open_file;
 	list_push_back (&thread_current ()->open_file_table, &entry->hock);
-	f->eax = entry->fd;
+	
+	return entry->fd;
 }
 
-static void
-remove_handler(struct intr_frame *f)
-{
-	// get file name
-	const char* file_name = (char*) get_parameter (f, PARM_ONE);
-	
+static bool
+remove_handler(const char* file_name)
+{	
 	// check for validity.
 	if (!valid_string (file_name))
 	{
-		f->eax = false;
-		return;
+		return false;
 	}
+	lock_acquire(&fs_lock);
+	
 	// remove it
-	f->eax = filesys_remove (file_name);
+	bool r_value = filesys_remove (file_name);
+	
+	lock_release(&fs_lock);
+
+	return r_value;
 }
 
-static void
-read_handler(struct intr_frame *f)
+static int
+read_handler(int fd, void *buffer, unsigned size)
 {
-	const char* file_name = (char*) get_parameter (f, PARM_ONE);
+
+	if(fd == 0){
+		// read from keyboard
+		int i = 0;
+		for(;i<size;i++){
+			(uint8_t)buffer[i] = input_getc();
+		}
+		return size;
+	}
+
+	lock_acquire(&fs_lock);
+
+	struct file* current_file = get_file_by_fd(fd);
+
+	if(current_file == NULL){
+		return -1;
+	}
+	int r_value = file_read(current_file,buffer,size);
+	
+	lock_release(&fs_lock);
+
+	return r_value;
 }
 
-void
+static void 
 update_process_waiters_list(int status)
 {
   tid_t current_tid = thread_current()->tid;
@@ -293,23 +311,32 @@ update_process_waiters_list(int status)
     }
 }
 
+
 static int
 allocate_fd()
 {
-	return thread_current ()->current_fd++;
+	lock_acquire(&fd_lock);
+	int fd = thread_current()->current_fd + 1;
+	lock_release(&fd_lock);
+	return fd;
 }
 
-static void
-tell_handler(struct intr_frame *f)
+static int
+tell_handler(int fd)
 {
-	int fd = (int) get_parameter (f,PARM_ONE);
+
+	lock_acquire(&fs_lock);
+	
 	struct file* current_file = get_file_by_fd (fd);
 	if (current_file == NULL)
 	{
-		f->eax = -1;
-		return;
+		return -1;
 	}
-	f->eax = file_tell(current_file);
+	int r_value = file_tell(current_file);
+	
+	lock_release(&fs_lock);
+
+	return r_value;
 }
 
 static bool
@@ -358,6 +385,8 @@ put_user (uint8_t *udst, uint8_t byte)
   return error_code != -1;
 }
 
+
+
 static bool
 valid_string_pointer(char *str)
 {
@@ -368,8 +397,7 @@ valid_string_pointer(char *str)
 }
 
 /* return file pointer crossponding to given fd. */
-static struct file *
-get_file_by_fd (int fd)
+static struct file *get_file_by_fd (int fd)
 {
 	
   struct list_elem *e;

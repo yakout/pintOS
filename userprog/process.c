@@ -89,26 +89,47 @@ start_process (void *file_name_)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
+
+extern struct list all_list;
+
+
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-
-  /* create new wait entry */
-  struct waiter entry;
-  entry.parent_tid = thread_current()->tid;
-  entry.child_tid = child_tid;
-  entry.child_exit_status=10;
-  list_push_back (&waiters_list, &entry.entry_hook);
-
-  /* wait until child exits */
-  while(entry.child_exit_status == 10)
+  /* 01 verify this is a child of mine */
+  bool found = false;
+  //struct list *target_list = &thread_current()->child_list;
+  struct list_elem *e;
+  for (e = list_begin (&all_list); e != list_end (&all_list);
+       e = list_next (e))
+  {
+    struct thread *t = list_entry (e, struct thread, allelem);
+    if(t->tid == child_tid)
     {
-      thread_yield();
+      found = true;
+      break;
     }
+  }
 
+  if(found == false){
+    return -1;
+  }
+
+
+  struct child_signal wait_signal;
+  wait_signal.child_tid = child_tid;
+  wait_signal.child_exit_status = 10;
+  list_push_back(&signal_list, &wait_signal.hook);
+  
+  while(wait_signal.child_exit_status == 10)
+  {
+    thread_yield();
+  }
+
+  //printf("\nheloooooooooooooooooooooooo\n");
   /* return child status */
-  list_remove(&entry.entry_hook);
-  return entry.child_exit_status;
+  //printf("\nexiting here ************\n");
+  return wait_signal.child_exit_status;
 
 }
 
@@ -568,3 +589,11 @@ get_argv(char* command, int* argc)
   free(c_copy);
   return argv;
 }
+
+
+/*
+void
+traverse_thread_list (struct list *target_list, thread_action_func *func, void *aux)
+{
+  
+}*/

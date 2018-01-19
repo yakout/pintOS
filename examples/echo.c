@@ -5,9 +5,9 @@ int
 main (int argc, char **argv)
 {
 
-  	printf("\nmy name is\n");
-
-  	printf("\nmohamed shaban\n");
+  	pid_t child = exec ("child-simple");
+  	printf ("wait(exec()) = %d", wait (child));
+  	printf ("wait(exec()) = %d", wait (child));
 
   	return EXIT_SUCCESS;
 }

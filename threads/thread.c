@@ -26,7 +26,7 @@ static struct list ready_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
-static struct list all_list;
+struct list all_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -204,13 +204,20 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  #ifdef USERPROG
-  /* Add it to the current thread child list. */
-    //list_init(&(t->child_list));
-    list_init(&(t->open_file_table));
-    //list_push_back(&(thread_current()->child_list) , &(t->childelem));
-    t->current_fd = 1;
-  #endif
+  /*#ifdef USERPROG
+  t->parent = thread_current()->tid;
+  printf("\nsuccess ************************\n");
+  printf("\ncurr id : %d\n", thread_current()->tid);
+  printf("\ncreated id : %d\n", t->tid);
+  list_push_back(&thread_current()->child_list, &t->child_hook);
+  
+  list_init(&(t->child_list));
+  list_init(&(t->open_file_table));
+  t->current_fd = 1;
+  t->waiting_status = FREE;
+  t->wait_child_status = -1;
+  t->wait_child_id = -1;
+  #endif*/
 
   intr_set_level (old_level);
 
@@ -478,6 +485,22 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
+
+  #ifdef USERPROG
+
+  if(t->tid != 0)
+  {
+    //t->parent = thread_current()->tid;
+    list_push_back(&thread_current()->child_list, &t->child_hook);
+  }
+  list_init(&(t->child_list));
+  list_init(&(t->open_file_table));
+  t->current_fd = 1;
+  //t->waiting_status = FREE;
+  //t->wait_child_status = -1;
+  //t->wait_child_id = -1;
+
+  #endif
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

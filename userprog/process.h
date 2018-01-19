@@ -5,7 +5,7 @@
 
 
 /* list of processes waiting on child */
-struct list waiters_list;
+/*struct list waiters_list;
 
 struct waiter {
 
@@ -14,7 +14,20 @@ struct waiter {
 	int child_exit_status;
 	struct list_elem entry_hook;
 	
+};*/
+
+struct list signal_list;
+
+
+struct child_signal {
+
+	struct list_elem hook;
+	tid_t child_tid;
+	int child_exit_status;
+
 };
+
+
 
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);

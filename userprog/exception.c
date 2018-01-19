@@ -4,6 +4,7 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "userprog/syscall.h"
 
 
 /* Number of page faults processed. */
@@ -90,8 +91,9 @@ kill (struct intr_frame *f)
       printf ("%s: dying due to interrupt %#04x (%s).\n",
               thread_name (), f->vec_no, intr_name (f->vec_no));
       intr_dump_frame (f);
-      exit (-1);
-      // thread_exit (); 
+      
+      exit_handler(-1);
+      //thread_exit (); 
 
     case SEL_KCSEG:
       /* Kernel's code segment, which indicates a kernel bug.
@@ -106,8 +108,9 @@ kill (struct intr_frame *f)
          kernel. */
       printf ("Interrupt %#04x (%s) in unknown segment %04x\n",
              f->vec_no, intr_name (f->vec_no), f->cs);
-      //exit(-1);
-      thread_exit ();
+      
+      exit_handler(-1);
+      //thread_exit (); 
     }
 }
 
@@ -143,6 +146,13 @@ page_fault (struct intr_frame *f)
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
   intr_enable ();
+
+  if(!user)
+  {
+    f->eip = f->eax;
+    f->eax = 0xffffffff;
+    exit_handler(-1);
+  }
 
   /* Count page faults. */
   page_fault_cnt++;

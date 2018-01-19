@@ -15,6 +15,12 @@ enum thread_status
     THREAD_DYING        /* About to be destroyed. */
   };
 
+enum wait_status
+{
+  WAIT,
+  FREE
+};
+
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
@@ -97,8 +103,14 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    //struct list_elem childelem;         /* List element for my Parent child list. */
-    //struct list child_list;             /* List for my children. */
+
+    //struct thread *parent;
+    struct list child_list;             /* List for my children. */
+    struct list_elem child_hook;        /* List element for my Parent child list. */
+    //enum wait_status waiting_status;
+    //int wait_child_status;
+    //tid_t wait_child_id; 
+
     struct list open_file_table;        /* List for files opened by process */
     int current_fd;
 #endif
@@ -106,7 +118,6 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
-
 
 
 struct file_entry

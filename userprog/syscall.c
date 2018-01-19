@@ -43,6 +43,8 @@ static void update_process_waiters_list(int status);
 static int allocate_fd();
 static void *to_kernel_addr (void *uaddr);
 
+/* This function used in exception.c */
+void exit (int status);
 
 
 struct lock fs_lock;
@@ -448,4 +450,11 @@ to_kernel_addr(void *uaddr)
 		exit_handler(-1);
 	}
 	return kaddr;
+}
+
+/* This function to be used through kernel */
+void 
+exit (int status)
+{
+	exit_handler (status);
 }

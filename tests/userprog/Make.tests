@@ -18,9 +18,11 @@ tests/%.output: PUTFILES = $(filter-out kernel.bin loader.bin, $^)
 #bad-jump bad-jump2)
 
 
-
-tests/userprog_TESTS = $(addprefix tests/userprog/, open-normal  \
-open-missing open-boundary open-empty		\
+tests/userprog_TESTS = $(addprefix tests/userprog/,args-none		\
+args-single args-multiple args-many args-dbl-space sc-bad-sp		\
+sc-bad-arg sc-boundary sc-boundary-2 halt exit create-normal		\
+create-empty create-null create-bad-ptr create-long create-exists	\
+create-bound open-normal open-missing open-boundary open-empty		\
 open-null open-bad-ptr open-twice close-normal close-twice close-stdin	\
 close-stdout close-bad-fd read-normal read-bad-ptr read-boundary	\
 read-zero read-stdout read-bad-fd write-normal write-bad-ptr		\
@@ -29,6 +31,7 @@ exec-multiple exec-missing exec-bad-ptr wait-simple wait-twice		\
 wait-killed wait-bad-pid multi-recurse multi-child-fd rox-simple	\
 rox-child rox-multichild bad-read bad-write bad-read2 bad-write2        \
 bad-jump bad-jump2)
+
 
 
 tests/userprog_PROGS = $(tests/userprog_TESTS) $(addprefix \

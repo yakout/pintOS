@@ -48,17 +48,19 @@ static bool to_kernel_addr (void *uaddr);
 struct lock fs_lock;
 extern struct list signal_list;
 
+extern struct lock sync_dummy;
+extern struct condition sync_cond;
+extern bool process_creation_successful;
 
-//extern struct list waiters_list;
-//extern struct waiter;
 
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&fs_lock);
-  //list_init(&waiters_list);
   list_init(&signal_list);
+  lock_init(&sync_dummy);
+  cond_init(&sync_cond);
 }
 
 static void verify_address(struct intr_frame *f,uint8_t bytes)
@@ -173,12 +175,6 @@ exit_handler (int status)
 static tid_t
 exec_handler(const char* cmd_line)
 {
-
-	/* check invalid memory reference */
-	/*if(!valid_pointer(&cmd_line)){
-		return -1;
-	}*/
-
 	/* check the pointer to be in user memory */
 	if(!valid_string(cmd_line)){
 		return -1;
@@ -187,9 +183,18 @@ exec_handler(const char* cmd_line)
 	lock_acquire (&fs_lock);					
 	// apply spwaning 
 	tid_t pid = process_execute (cmd_line);
+
+	/* process syncing between child and parent */
+	/* parent just woke from sleep waiting for child to finish load */
+	if( process_creation_successful == false ){
+		pid = -1;
+	}
 	// you can continue on
 	lock_release(&fs_lock);
 	// return id
+
+	//printf("\nreturn pid : %d\n", pid);
+
 	return pid;
 }
 
@@ -293,11 +298,6 @@ static void
 close_handler (int fd)
 {
 
-	/* check invalid memory reference */
-	/*if(!valid_pointer(&fd)){
-		return;
-	}*/
-
 	struct file_entry *entry = get_file_entry_by_fd(fd);
 	if(entry== NULL)
 	{
@@ -316,6 +316,9 @@ read_handler(int fd, void *buffer, unsigned size)
 	/*if(!valid_pointer(&fd) || !valid_pointer(&buffer) || !valid_pointer(&size)){
 		return -1;
 	}*/
+	if(!valid_pointer(buffer)){
+		exit_handler(-1);
+	}
 
 	char* f_buffer = (char*) buffer;
 
@@ -332,8 +335,6 @@ read_handler(int fd, void *buffer, unsigned size)
 	if(entry == NULL){
 		return -1;
 	}
-
-	//printf();
 
 	struct file * current_file=entry->file;
 	lock_acquire(&fs_lock);
@@ -513,12 +514,11 @@ valid_pointer (void* pt)
 
 	uint8_t i=0;
 	uint8_t bytes = 4;
-	uint8_t* kaka = (uint8_t *)pt;
+	uint8_t* tmp = (uint8_t *)pt;
 	for(; i<bytes; i++)
 	{
-		if(get_user((kaka+i)) == -1)
+		if(get_user((tmp+i)) == -1)
 		{
-			//printf("hamada\n");
 			return false;
 		}
 	}

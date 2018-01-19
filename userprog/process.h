@@ -2,6 +2,7 @@
 #define USERPROG_PROCESS_H
 
 #include "threads/thread.h"
+#include "threads/synch.h"
 
 
 /* list of processes waiting on child */
@@ -18,6 +19,9 @@ struct waiter {
 
 struct list signal_list;
 
+struct lock sync_dummy;
+struct condition sync_cond;
+bool process_creation_successful;
 
 struct child_signal {
 

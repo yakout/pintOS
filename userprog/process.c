@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -39,10 +40,14 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-
-
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT+5, start_process, fn_copy);
+  
+  /* process syncing between child and parent */
+  lock_acquire(&sync_dummy);
+  cond_wait(&sync_cond, &sync_dummy);
+  lock_release(&sync_dummy);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -64,11 +69,18 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+  /* process syncing between child and parent */
+  process_creation_successful = success;
+  lock_acquire(&sync_dummy);
+  cond_signal(&sync_cond, &sync_dummy);
+  lock_release(&sync_dummy);
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
 
-  if (!success) 
-    thread_exit ();
+  if (!success) {
+    exit_handler(-1);
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -250,6 +262,9 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
+
+  //printf("\nfile name : %s\n", file_name);
+
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;

@@ -160,10 +160,6 @@ halt_handler( void )
 void
 exit_handler (int status)
 {
-	/* check invalid memory reference */
-	/*if(is_kernel_vaddr(&status)){
-		status = -1;
-	}*/
 
 	printf ("%s: exit(%d)\n", thread_current()->name, status);
 	file_close(thread_current()->me_as_executable);
@@ -284,8 +280,6 @@ open_handler(const char* file)
 	struct file_entry* entry = malloc (sizeof (*entry));
 	entry->fd = allocate_fd ();
 	entry->file = open_file;
-	entry->file_name = malloc(strlen(file));
-	memcpy(entry->file_name, file, strlen(file));
 	list_push_back (&thread_current ()->open_file_table, &entry->hook);
 	
 	//printf("\nID %d\n", entry->fd);
@@ -304,7 +298,6 @@ close_handler (int fd)
 	}
 	list_remove(&entry->hook);
 	file_close(entry->file);
-	free(entry->file_name);
 	free(entry);
 }
 
@@ -466,7 +459,6 @@ get_file_entry_by_fd (int fd)
 static void 
 signal_parent(int status)
 {
-	// 2 tests fail beacuse of this
 
   tid_t curr_tid = thread_current()->tid;
   struct list_elem *e;
@@ -481,10 +473,6 @@ signal_parent(int status)
       		break;
     	}
   	}
-
-
-  	//printf("\nchild exiting ---------\n");
-
 }
 
 

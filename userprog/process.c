@@ -19,6 +19,7 @@
 #include "threads/vaddr.h"
 #include "syscall.h"
 
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static char** get_argv(char* command, int* argc);
@@ -84,6 +85,14 @@ start_process (void *file_name_)
 
   /* process syncing between child and parent */
   process_creation_successful = success;
+
+  if(success){
+    // put me in signal_list
+    struct child_signal *child =  malloc(sizeof(*child));
+    child->child_tid = thread_current()->tid;
+    child->finished = false;
+    list_push_back(&signal_list,&child->hook);
+  }
   
   cond_signal(&sync_cond, &sync_dummy);
 
@@ -122,40 +131,35 @@ extern struct list all_list;
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  /* 01 verify this is a child of mine */
-  bool found = false;
-  //struct list *target_list = &thread_current()->child_list;
   struct list_elem *e;
-  for (e = list_begin (&all_list); e != list_end (&all_list);
+
+  struct child_signal *wait_signal = NULL;
+  for (e = list_begin (&signal_list); e != list_end (&signal_list);
        e = list_next (e))
   {
-    struct thread *t = list_entry (e, struct thread, allelem);
-    if(t->tid == child_tid)
+    struct child_signal *t = list_entry (e, struct child_signal, hook);
+    if(t->child_tid == child_tid)
     {
-      found = true;
+      wait_signal = t;
       break;
     }
   }
 
-  if(found == false){
+  if(wait_signal == NULL){
     return -1;
   }
-
-
-  struct child_signal wait_signal;
-  wait_signal.child_tid = child_tid;
-  wait_signal.finished = false;
-  list_push_back(&signal_list, &wait_signal.hook);
   
-  while(!wait_signal.finished)
+  while(!wait_signal->finished)
   {
     thread_yield();
   }
+  int child_exit_status = wait_signal->child_exit_status;
 
-  //printf("\nheloooooooooooooooooooooooo\n");
-  /* return child status */
-  //printf("\nexiting here ************\n");
-  return wait_signal.child_exit_status;
+  list_remove(&wait_signal->hook);
+  
+  free(wait_signal);
+
+  return child_exit_status;
 
 }
 

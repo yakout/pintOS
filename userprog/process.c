@@ -53,12 +53,12 @@ process_execute (const char *file_name)
 
   /* process syncing between child and parent */
   cond_wait(&sync_cond, &sync_dummy);
-  
+
   if(!process_creation_successful){
     tid = TID_ERROR;
   }
-  lock_release(&sync_dummy);
 
+  lock_release(&sync_dummy);
 
   return tid;
 }
@@ -144,10 +144,10 @@ process_wait (tid_t child_tid UNUSED)
 
   struct child_signal wait_signal;
   wait_signal.child_tid = child_tid;
-  wait_signal.child_exit_status = 10;
+  wait_signal.finished = false;
   list_push_back(&signal_list, &wait_signal.hook);
   
-  while(wait_signal.child_exit_status == 10)
+  while(!wait_signal.finished)
   {
     thread_yield();
   }

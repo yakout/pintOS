@@ -72,7 +72,6 @@ static void verify_address(struct intr_frame *f,uint8_t bytes)
 	{
 		if(get_user((pt+i)) == -1)
 		{
-			//printf("-------%p\n", pt);
 			exit_handler(-1);
 		}
 	}
@@ -83,10 +82,10 @@ syscall_handler (struct intr_frame *f UNUSED)
 {
 	int *p=f->esp;
 	/* check valid system call address */
-	/*if(!valid_pointer(f->esp))
+	if(!valid_pointer(f->esp))
 	{
 		exit_handler(-1);
-	}*/
+	}
 	switch(*p) {
 	 	case SYS_HALT:
 	 		verify_address(f,4);
@@ -180,10 +179,10 @@ exec_handler(const char* cmd_line)
 		return -1;
 	}
  	// no interrupts until parent finishes
-	lock_acquire (&fs_lock);					
+	lock_acquire (&fs_lock);
+
 	// apply spwaning 
 	tid_t pid = process_execute (cmd_line);
-
 	/* process syncing between child and parent */
 	/* parent just woke from sleep waiting for child to finish load */
 	// you can continue on
@@ -461,6 +460,7 @@ get_file_entry_by_fd (int fd)
 static void 
 signal_parent(int status)
 {
+	// 2 tests fail beacuse of this
 
   tid_t curr_tid = thread_current()->tid;
   struct list_elem *e;
@@ -471,6 +471,7 @@ signal_parent(int status)
     	if(curr_tid == sig->child_tid)
     	{
       		sig->child_exit_status = status;
+      		sig->finished = true;
       		break;
     	}
   	}

@@ -28,6 +28,7 @@ struct child_signal {
 	struct list_elem hook;
 	tid_t child_tid;
 	int child_exit_status;
+	bool finished;
 
 };
 

@@ -186,9 +186,6 @@ exec_handler(const char* cmd_line)
 
 	/* process syncing between child and parent */
 	/* parent just woke from sleep waiting for child to finish load */
-	if( process_creation_successful == false ){
-		pid = -1;
-	}
 	// you can continue on
 	lock_release(&fs_lock);
 	// return id

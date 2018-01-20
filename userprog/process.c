@@ -40,16 +40,26 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  lock_acquire(&sync_dummy);
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT+5, start_process, fn_copy);
   
+  if (tid == TID_ERROR){
+    lock_release(&sync_dummy);
+    palloc_free_page (fn_copy);
+    return tid;
+  } 
+
   /* process syncing between child and parent */
-  lock_acquire(&sync_dummy);
   cond_wait(&sync_cond, &sync_dummy);
+  
+  if(!process_creation_successful){
+    tid = TID_ERROR;
+  }
   lock_release(&sync_dummy);
 
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+
   return tid;
 }
 
@@ -67,12 +77,16 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
+  lock_acquire(&sync_dummy);
+
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* process syncing between child and parent */
   process_creation_successful = success;
-  lock_acquire(&sync_dummy);
+  
   cond_signal(&sync_cond, &sync_dummy);
+
   lock_release(&sync_dummy);
 
   /* If load failed, quit. */

@@ -42,7 +42,7 @@ static struct file_entry *get_file_entry_by_fd (int fd);
 static void signal_parent(int status);
 static int allocate_fd();
 static bool to_kernel_addr (void *uaddr);
-
+static bool is_executable(char *file_name);
 
 
 struct lock fs_lock;
@@ -166,6 +166,7 @@ exit_handler (int status)
 	}*/
 
 	printf ("%s: exit(%d)\n", thread_current()->name, status);
+	file_close(thread_current()->me_as_executable);
  	signal_parent (status);
  	//printf("\nsignaled parent\n");
  	thread_exit ();
@@ -276,13 +277,15 @@ open_handler(const char* file)
 
 	if(open_file == NULL)
 	{
-		return -1 ;
+			return -1 ;
 	}
 
 	// note that you should free the file_entry struct when close.
 	struct file_entry* entry = malloc (sizeof (*entry));
 	entry->fd = allocate_fd ();
 	entry->file = open_file;
+	entry->file_name = malloc(strlen(file));
+	memcpy(entry->file_name, file, strlen(file));
 	list_push_back (&thread_current ()->open_file_table, &entry->hook);
 	
 	//printf("\nID %d\n", entry->fd);
@@ -301,6 +304,7 @@ close_handler (int fd)
 	}
 	list_remove(&entry->hook);
 	file_close(entry->file);
+	free(entry->file_name);
 	free(entry);
 }
 
@@ -361,6 +365,8 @@ write_handler(int fd, void *buffer, unsigned size)
 	if(entry == NULL){
 		return -1;
 	}
+
+
 
 	struct file * f=entry->file;
 	lock_acquire(&fs_lock);
@@ -573,4 +579,15 @@ to_kernel_addr(void *uaddr)
 		exit_handler(-1);
 	}*/
 	return kaddr!=NULL;
+}
+
+static bool 
+is_executable(char *file_name){
+	while( *(file_name) != '\0'){
+		if(*(file_name) == '.'){
+			return false;
+		}
+		file_name++;
+	}
+	return true;
 }

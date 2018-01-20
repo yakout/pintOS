@@ -274,7 +274,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
 bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+ load (const char *file_name, void (**eip) (void), void **esp) 
 {
 
   //printf("\nfile name : %s\n", file_name);
@@ -394,10 +394,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
   }
   free(argv);
 
- done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
-
+ done:
+ if(success){
+  t->me_as_executable = file;
+  file_deny_write(file);
+ }else{
+    file_close (file);
+ }
   return success;
 }
 

@@ -113,6 +113,9 @@ struct thread
 
     struct list open_file_table;        /* List for files opened by process */
     int current_fd;
+
+    struct file* me_as_executable;
+
 #endif
 
     /* Owned by thread.c. */
@@ -126,6 +129,7 @@ struct file_entry
   struct list_elem hook;
   int fd;
   struct file* file;
+  char *file_name;
 
 };
 

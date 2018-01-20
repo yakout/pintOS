@@ -85,6 +85,8 @@ start_process (void *file_name_)
 
   /* process syncing between child and parent */
   process_creation_successful = success;
+  
+  cond_signal(&sync_cond, &sync_dummy);
 
   if(success){
     // put me in signal_list
@@ -93,8 +95,6 @@ start_process (void *file_name_)
     child->finished = false;
     list_push_back(&signal_list,&child->hook);
   }
-  
-  cond_signal(&sync_cond, &sync_dummy);
 
   lock_release(&sync_dummy);
 

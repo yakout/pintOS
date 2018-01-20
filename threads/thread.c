@@ -204,21 +204,6 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  /*#ifdef USERPROG
-  t->parent = thread_current()->tid;
-  printf("\nsuccess ************************\n");
-  printf("\ncurr id : %d\n", thread_current()->tid);
-  printf("\ncreated id : %d\n", t->tid);
-  list_push_back(&thread_current()->child_list, &t->child_hook);
-  
-  list_init(&(t->child_list));
-  list_init(&(t->open_file_table));
-  t->current_fd = 1;
-  t->waiting_status = FREE;
-  t->wait_child_status = -1;
-  t->wait_child_id = -1;
-  #endif*/
-
   intr_set_level (old_level);
 
   /* Add to run queue. */

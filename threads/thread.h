@@ -129,7 +129,6 @@ struct file_entry
   struct list_elem hook;
   int fd;
   struct file* file;
-  char *file_name;
 
 };
 

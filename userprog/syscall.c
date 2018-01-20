@@ -42,8 +42,8 @@ static struct file_entry *get_file_entry_by_fd (int fd);
 static void signal_parent(int status);
 static int allocate_fd();
 static bool to_kernel_addr (void *uaddr);
-static bool is_executable(char *file_name);
-
+static void close_files();
+static void free_entry(struct file_entry *entry);
 
 struct lock fs_lock;
 extern struct list signal_list;
@@ -162,8 +162,12 @@ exit_handler (int status)
 {
 
 	printf ("%s: exit(%d)\n", thread_current()->name, status);
+	
+	close_files();
+
 	file_close(thread_current()->me_as_executable);
  	signal_parent (status);
+
  	//printf("\nsignaled parent\n");
  	thread_exit ();
 }
@@ -296,9 +300,7 @@ close_handler (int fd)
 	{
 		return;
 	}
-	list_remove(&entry->hook);
-	file_close(entry->file);
-	free(entry);
+	free_entry(entry);
 }
 
 
@@ -345,11 +347,18 @@ write_handler(int fd, void *buffer, unsigned size)
 	/*if(!valid_pointer(&fd) || !valid_pointer(&buffer) || !valid_pointer(&size)){
 		return -1;
 	}*/
+	char* f_buffer = (char*) buffer;
 
 	/* read from console */
 	if (fd == 1) 
 	{
-		putbuf (buffer, size);
+		unsigned temp_size = size;
+		while(temp_size > 100){
+			putbuf (f_buffer, 100);
+			temp_size-=100;
+			f_buffer+=100;
+		}
+		putbuf (buffer, temp_size);
     	return size;
 	}
 
@@ -561,21 +570,21 @@ to_kernel_addr(void *uaddr)
 	{
 		kaddr = pagedir_get_page (curr->pagedir, uaddr);
 	} 
-	/*if (kaddr == NULL)
-	{
-		// uaddr is unmapped
-		exit_handler(-1);
-	}*/
 	return kaddr!=NULL;
 }
 
-static bool 
-is_executable(char *file_name){
-	while( *(file_name) != '\0'){
-		if(*(file_name) == '.'){
-			return false;
-		}
-		file_name++;
+static void
+close_files(){
+	int fd = 2;
+	struct file_entry *entry = get_file_entry_by_fd(fd); 
+	while(entry != NULL){
+		fd++;
+		free_entry(entry);
 	}
-	return true;
+}
+static void
+free_entry(struct file_entry *entry){
+		list_remove(&entry->hook);
+		file_close(entry->file);
+		free(entry);
 }

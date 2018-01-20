@@ -580,11 +580,12 @@ close_files(){
 	while(entry != NULL){
 		fd++;
 		free_entry(entry);
+		entry = get_file_entry_by_fd(fd);
 	}
 }
 static void
 free_entry(struct file_entry *entry){
-		list_remove(&entry->hook);
 		file_close(entry->file);
+		list_remove(&entry->hook);
 		free(entry);
 }
